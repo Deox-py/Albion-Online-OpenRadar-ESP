@@ -395,20 +395,35 @@ export class RadarRenderer {
     }
 
     renderZoneInfo(ctx) {
-        if (!this.map?.id) return;
+        if (this.map?.id === undefined || this.map?.id === null || this.map.id === -1) return;
 
+        const mapId = String(this.map.id);
         const zone = zonesDatabase.getZone(this.map.id);
-        const zoneName = zone?.name || this.map.id;
-        const tier = zone?.tier ? `T${zone.tier}` : '';
-        const pvpType = zone?.pvpType || 'safe';
+        const isMist = mapId.startsWith('@MISTS@');
+        const isAbbey = mapId.startsWith('@MISTSDUNGEON@');
+
+        // Dynamic Mist ids are runtime instance identifiers. The origin zone is
+        // useful metadata, but it is not the actual name of the current map.
+        let zoneName;
+        if (isAbbey) {
+            zoneName = 'Knightfall Abbey';
+        } else if (isMist) {
+            zoneName = 'Mists';
+        } else {
+            zoneName = zone?.name || 'Zona desconocida';
+        }
+
+        const tier = (!isMist && !isAbbey && zone?.tier) ? `T${zone.tier}` : '';
+        const pvpType = zone?.pvpType || 'unknown';
 
         const pvpStyles = {
             'black': {icon: '\u{1F480}', color: '#ff4444'},
             'red': {icon: '\u{2694}\uFE0F', color: '#ff8800'},
             'yellow': {icon: '\u{1F536}', color: '#ffff00'},
-            'safe': {icon: '\u{1F6E1}\uFE0F', color: '#44ff44'}
+            'safe': {icon: '\u{1F6E1}\uFE0F', color: '#44ff44'},
+            'unknown': {icon: '?', color: '#94a3b8'}
         };
-        const style = pvpStyles[pvpType] || pvpStyles.safe;
+        const style = pvpStyles[pvpType] || pvpStyles.unknown;
 
         const scale = Math.min(1, ctx.canvas.width / 500);
         const fontPx = Math.max(8, Math.round(11 * scale));
