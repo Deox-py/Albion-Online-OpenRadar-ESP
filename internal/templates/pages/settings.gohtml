@@ -6,18 +6,18 @@
             <div class="p-2 rounded-lg bg-error/10">
                 <i data-lucide="alert-triangle" class="w-6 h-6 text-error"></i>
             </div>
-            <h3 class="text-lg font-semibold text-base-content">Reset All Settings</h3>
+            <h3 class="text-lg font-semibold text-base-content">Restablecer toda la configuración</h3>
         </div>
-        <p class="text-base-content/60 mb-6">This will reset all settings to their default values and reload the page. This action cannot be undone.</p>
+        <p class="text-base-content/60 mb-6">Esto restablecerá toda la configuración a sus valores predeterminados y recargará la página. Esta acción no se puede deshacer.</p>
         <div class="modal-action">
             <form method="dialog">
-                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-ghost">Cancelar</button>
             </form>
-            <button id="confirmResetSettings" class="btn btn-error">Reset Settings</button>
+            <button id="confirmResetSettings" class="btn btn-error">Restablecer configuración</button>
         </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-        <button>close</button>
+        <button aria-label="Cerrar">cerrar</button>
     </form>
 </dialog>
 
@@ -27,18 +27,18 @@
             <div class="p-2 rounded-lg bg-warning/10">
                 <i data-lucide="trash-2" class="w-6 h-6 text-warning"></i>
             </div>
-            <h3 class="text-lg font-semibold text-base-content">Clear Browser Cache</h3>
+            <h3 class="text-lg font-semibold text-base-content">Borrar caché del navegador</h3>
         </div>
-        <p class="text-base-content/60 mb-6">This will clear the browser cache for this site. Cached images and data will need to be reloaded.</p>
+        <p class="text-base-content/60 mb-6">Esto borrará la caché del navegador para este sitio. Las imágenes y los datos almacenados deberán cargarse de nuevo.</p>
         <div class="modal-action">
             <form method="dialog">
-                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-ghost">Cancelar</button>
             </form>
-            <button id="confirmClearCache" class="btn btn-warning">Clear Cache</button>
+            <button id="confirmClearCache" class="btn btn-warning">Borrar caché</button>
         </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-        <button>close</button>
+        <button aria-label="Cerrar">cerrar</button>
     </form>
 </dialog>
 
@@ -46,8 +46,35 @@
     <!-- Page Header -->
     <div class="card bg-base-200">
         <div class="card-body">
-            <h1 class="text-3xl font-bold text-base-content">Settings</h1>
-            <p class="text-base-content/60 mt-2">Configure radar display and debug options.</p>
+            <h1 class="text-3xl font-bold text-base-content">Configuración</h1>
+            <p class="text-base-content/60 mt-2">Configura la visualización del radar y las opciones de depuración.</p>
+        </div>
+    </div>
+
+
+    <!-- Quick Profiles -->
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-base-content flex items-center gap-2">
+                        <i data-lucide="wand-2" class="w-5 h-5 text-secondary"></i>
+                        Perfiles rápidos
+                    </h2>
+                    <p class="text-sm text-base-content/60 mt-1">Aplica una base optimizada sin borrar tus filtros específicos de recursos.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <select id="settingQuickProfile" class="select select-bordered select-sm">
+                        <option value="gathering">Recolección</option>
+                        <option value="pve">PvE</option>
+                        <option value="exploration">Exploración</option>
+                        <option value="minimal">Minimalista</option>
+                    </select>
+                    <button id="applyQuickProfile" class="btn btn-secondary btn-sm">
+                        <i data-lucide="check" class="w-4 h-4"></i> Aplicar perfil
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -56,7 +83,7 @@
         <div class="card-body">
             <h2 class="text-xl font-semibold text-base-content mb-4 flex items-center gap-2">
                 <i data-lucide="eye" class="w-5 h-5 text-primary"></i>
-                Display
+                Visualización
             </h2>
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -65,9 +92,9 @@
                     <input type="checkbox" id="settingShowMap" class="checkbox checkbox-primary checkbox-sm">
                     <span class="text-base-content/80 group-hover:text-base-content transition-colors flex items-center gap-2">
                         <i data-lucide="map" class="w-4 h-4 text-base-content/50"></i>
-                        Map Background
+                        Fondo del mapa
                     </span>
-                    <div class="tooltip" data-tip="Display the Albion Online map as background on the radar.">
+                    <div class="tooltip" data-tip="Muestra el mapa de Albion Online como fondo del radar.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
@@ -77,9 +104,9 @@
                     <input type="checkbox" id="settingResourceCount" class="checkbox checkbox-primary checkbox-sm">
                     <span class="text-base-content/80 group-hover:text-base-content transition-colors flex items-center gap-2">
                         <i data-lucide="hash" class="w-4 h-4 text-base-content/50"></i>
-                        Resource Count
+                        Cantidad de recursos
                     </span>
-                    <div class="tooltip" data-tip="Shows total quantity including gathering bonuses.">
+                    <div class="tooltip" data-tip="Muestra la cantidad total incluyendo bonificaciones de recolección.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
@@ -89,9 +116,9 @@
                     <input type="checkbox" id="settingResourceDistance" class="checkbox checkbox-primary checkbox-sm">
                     <span class="text-base-content/80 group-hover:text-base-content transition-colors flex items-center gap-2">
                         <i data-lucide="ruler" class="w-4 h-4 text-base-content/50"></i>
-                        Distance Indicator
+                        Indicador de distancia
                     </span>
-                    <div class="tooltip" data-tip="Color-coded: Green (<20m), Yellow (20-40m), Red (>40m).">
+                    <div class="tooltip" data-tip="Código de color: Verde (<20 m), Amarillo (20-40 m), Rojo (>40 m).">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
@@ -101,9 +128,9 @@
                     <input type="checkbox" id="settingResourceColorBadges" class="checkbox checkbox-primary checkbox-sm">
                     <span class="text-base-content/80 group-hover:text-base-content transition-colors flex items-center gap-2">
                         <i data-lucide="palette" class="w-4 h-4 text-base-content/50"></i>
-                        Resource Color Badges
+                        Etiquetas de color de recursos
                     </span>
-                    <div class="tooltip" data-tip="Replace resource icons with colored tier badges (better visibility). Living variants get a gold border.">
+                    <div class="tooltip" data-tip="Sustituye los iconos de recursos por etiquetas de tier de colores (mejor visibilidad). Las variantes vivas reciben un borde dorado.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
@@ -115,25 +142,60 @@
                     <input type="checkbox" id="settingResourceClusters" class="checkbox checkbox-primary checkbox-sm">
                     <span class="text-base-content/80 group-hover:text-base-content transition-colors flex items-center gap-2">
                         <i data-lucide="group" class="w-4 h-4 text-base-content/50"></i>
-                        Resource Clusters
+                        Grupos de recursos
                     </span>
-                    <div class="tooltip" data-tip="Groups nearby resources for efficient harvesting routes.">
+                    <div class="tooltip" data-tip="Agrupa recursos cercanos para rutas de recolección más eficientes.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
                 <div class="mt-3 ml-8 flex flex-wrap gap-4">
                     <label class="flex items-center gap-2">
-                        <span class="text-base-content/60 text-xs">Radius</span>
+                        <span class="text-base-content/60 text-xs">Radio</span>
                         <input id="settingClusterRadius" type="number" min="10" max="100" step="5" placeholder="30"
                                class="input input-bordered input-xs w-20">
                         <span class="text-base-content/50 text-xs">m</span>
                     </label>
                     <label class="flex items-center gap-2">
-                        <span class="text-base-content/60 text-xs">Min size</span>
+                        <span class="text-base-content/60 text-xs">Tamaño mínimo</span>
                         <input id="settingClusterMinSize" type="number" min="2" max="10" step="1" placeholder="2"
                                class="input input-bordered input-xs w-16">
                     </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="settingAutoClusterRadius" class="toggle toggle-primary toggle-xs">
+                        <span class="text-base-content/60 text-xs">Radio adaptativo al zoom</span>
+                    </label>
                 </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Performance Settings -->
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h2 class="text-xl font-semibold text-base-content mb-4 flex items-center gap-2">
+                <i data-lucide="gauge" class="w-5 h-5 text-success"></i>
+                Rendimiento
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <label class="form-control">
+                    <span class="label-text text-sm mb-2">FPS objetivo</span>
+                    <select id="settingTargetFps" class="select select-bordered select-sm">
+                        <option value="15">15 FPS</option>
+                        <option value="30">30 FPS</option>
+                        <option value="45">45 FPS</option>
+                        <option value="60">60 FPS</option>
+                    </select>
+                    <span class="text-xs text-base-content/50 mt-1">30 FPS ofrece el mejor equilibrio.</span>
+                </label>
+                <label class="flex items-center gap-3 p-3 rounded-lg bg-base-300 cursor-pointer">
+                    <input type="checkbox" id="settingReduceWhenHidden" class="toggle toggle-primary toggle-sm">
+                    <span>Reducir FPS en segundo plano</span>
+                </label>
+                <label class="flex items-center gap-3 p-3 rounded-lg bg-base-300 cursor-pointer">
+                    <input type="checkbox" id="settingCompactMode" class="toggle toggle-secondary toggle-sm">
+                    <span>Modo compacto</span>
+                </label>
             </div>
         </div>
     </div>
@@ -143,47 +205,47 @@
         <input type="checkbox" id="collapse-logging"/>
         <div class="collapse-title text-xl font-semibold flex items-center gap-2">
             <i data-lucide="scroll-text" class="w-5 h-5 text-info"></i>
-            Logging
+            Registros
         </div>
         <div class="collapse-content">
-            <p class="text-xs text-base-content/60 mt-1 pb-2">Logs land in <code>logs/sessions/</code>, <code>logs/debug/</code>, <code>logs/errors/</code>. Errors are always saved on the backend side.</p>
+            <p class="text-xs text-base-content/60 mt-1 pb-2">Los registros se guardan en <code>logs/sessions/</code>, <code>logs/debug/</code>, <code>logs/errors/</code>. Los errores siempre se guardan también en el backend.</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                 <!-- Log Level -->
                 <div>
                     <h3 class="text-sm font-semibold text-base-content/80 mb-3 flex items-center gap-2">
                         <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-                        Log Level
+                        Nivel de registro
                     </h3>
                     <select id="logLevel" class="select select-bordered select-sm w-full max-w-xs">
-                        <option value="OFF">OFF - No logs</option>
-                        <option value="ERROR">ERROR - Errors only</option>
-                        <option value="WARN" selected>WARN - Warnings & Errors</option>
-                        <option value="INFO">INFO - Info, Warnings & Errors</option>
-                        <option value="DEBUG">DEBUG - Everything</option>
+                        <option value="OFF">OFF - Sin registros</option>
+                        <option value="ERROR">ERROR - Sólo errores</option>
+                        <option value="WARN" selected>WARN - Advertencias y errores</option>
+                        <option value="INFO">INFO - Información, advertencias y errores</option>
+                        <option value="DEBUG">DEBUG - Todo</option>
                     </select>
-                    <p class="text-xs text-base-content/50 mt-2">Controls minimum log level displayed</p>
+                    <p class="text-xs text-base-content/50 mt-2">Controla el nivel mínimo de registro que se muestra</p>
                 </div>
 
                 <!-- Output Destination -->
                 <div>
                     <h3 class="text-sm font-semibold text-base-content/80 mb-3 flex items-center gap-2">
                         <i data-lucide="monitor" class="w-4 h-4"></i>
-                        Output
+                        Salida
                     </h3>
                     <div class="space-y-2">
                         <label class="flex items-center gap-3 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                             <input type="checkbox" id="settingLogToConsole" class="toggle toggle-primary toggle-sm">
                             <i data-lucide="terminal" class="w-4 h-4 text-base-content/50"></i>
-                            <span class="text-base-content/80 text-sm group-hover:text-base-content">Browser Console (F12)</span>
-                            <div class="tooltip" data-tip="Print logs in the browser DevTools console.">
+                            <span class="text-base-content/80 text-sm group-hover:text-base-content">Consola del navegador (F12)</span>
+                            <div class="tooltip" data-tip="Muestra registros en la consola de DevTools del navegador.">
                                 <i data-lucide="info" class="w-3 h-3 opacity-50"></i>
                             </div>
                         </label>
                         <label class="flex items-center gap-3 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                             <input type="checkbox" id="settingLogToServer" class="toggle toggle-primary toggle-sm">
                             <i data-lucide="server" class="w-4 h-4 text-base-content/50"></i>
-                            <span class="text-base-content/80 text-sm group-hover:text-base-content">Server Logs (JSONL)</span>
-                            <div class="tooltip" data-tip="Send frontend logs to the backend (saved to logs/debug/; errors go to logs/errors/ too).">
+                            <span class="text-base-content/80 text-sm group-hover:text-base-content">Registros del servidor (JSONL)</span>
+                            <div class="tooltip" data-tip="Envía los registros del frontend al backend (se guardan en logs/debug/; los errores también van a logs/errors/).">
                                 <i data-lucide="info" class="w-3 h-3 opacity-50"></i>
                             </div>
                         </label>
@@ -195,25 +257,25 @@
             <div class="mt-4">
                 <h3 class="text-sm font-semibold text-base-content/80 mb-3 flex items-center gap-2">
                     <i data-lucide="filter" class="w-4 h-4"></i>
-                    Category Filters
-                    <span class="text-xs text-base-content/50 font-normal">(applies to DEBUG & INFO only)</span>
+                    Filtros por categoría
+                    <span class="text-xs text-base-content/50 font-normal">(se aplica sólo a DEBUG e INFO)</span>
                 </h3>
                 <div class="grid grid-cols-3 gap-2">
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="categorySystem" class="checkbox checkbox-primary checkbox-xs">
-                        <span class="text-base-content/80 text-xs group-hover:text-base-content">System</span>
+                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Sistema</span>
                     </label>
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="categoryNetwork" class="checkbox checkbox-primary checkbox-xs">
-                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Network</span>
+                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Red</span>
                     </label>
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="categoryMap" class="checkbox checkbox-primary checkbox-xs">
-                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Map</span>
+                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Mapa</span>
                     </label>
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="categoryPlayers" class="checkbox checkbox-primary checkbox-xs">
-                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Players</span>
+                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Jugadores</span>
                     </label>
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="categoryMobs" class="checkbox checkbox-primary checkbox-xs">
@@ -221,19 +283,19 @@
                     </label>
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="categoryHarvestables" class="checkbox checkbox-primary checkbox-xs">
-                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Harvestables</span>
+                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Recursos recolectables</span>
                     </label>
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="categoryDungeons" class="checkbox checkbox-primary checkbox-xs">
-                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Dungeons</span>
+                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Mazmorras</span>
                     </label>
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="categoryFishing" class="checkbox checkbox-primary checkbox-xs">
-                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Fishing</span>
+                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Pesca</span>
                     </label>
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="categoryRendering" class="checkbox checkbox-primary checkbox-xs">
-                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Rendering</span>
+                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Renderizado</span>
                     </label>
                 </div>
             </div>
@@ -245,8 +307,8 @@
         <input type="checkbox" id="collapse-debug"/>
         <div class="collapse-title text-xl font-semibold flex items-center gap-2">
             <i data-lucide="bug" class="w-5 h-5 text-warning"></i>
-            Debug
-            <span class="text-xs text-base-content/50 ml-auto mr-6">Advanced</span>
+            Depuración
+            <span class="text-xs text-base-content/50 ml-auto mr-6">Avanzado</span>
         </div>
         <div class="collapse-content">
             <div class="pt-2">
@@ -256,9 +318,9 @@
                         <input type="checkbox" id="settingServerLogsEnabled"
                                class="toggle toggle-primary toggle-sm">
                         <i data-lucide="hard-drive" class="w-4 h-4 text-base-content/50"></i>
-                        <span class="text-base-content/80 text-sm group-hover:text-base-content">Save Backend Logs</span>
+                        <span class="text-base-content/80 text-sm group-hover:text-base-content">Guardar registros del backend</span>
                         <div class="tooltip"
-                             data-tip="Save backend (Go) logs to logs/sessions/. Errors are always saved to logs/errors/.">
+                             data-tip="Guarda los registros del backend (Go) en logs/sessions/. Los errores siempre se guardan en logs/errors/.">
                             <i data-lucide="info" class="w-3 h-3 opacity-50"></i>
                         </div>
                     </label>
@@ -268,9 +330,9 @@
                         <input type="checkbox" id="settingPcapRecording"
                                class="toggle toggle-primary toggle-sm">
                         <i data-lucide="circle-dot" class="w-4 h-4 text-base-content/50"></i>
-                        <span class="text-base-content/80 text-sm group-hover:text-base-content">Record Network Capture (pcap)</span>
+                        <span class="text-base-content/80 text-sm group-hover:text-base-content">Grabar captura de red (PCAP)</span>
                         <div class="tooltip"
-                             data-tip="Record the raw network capture to logs/captures/. Useful for debugging without running tcpdump externally.">
+                             data-tip="Graba la captura de red sin procesar en logs/captures/. Útil para depuración sin ejecutar tcpdump externamente.">
                             <i data-lucide="info" class="w-3 h-3 opacity-50"></i>
                         </div>
                     </label>
@@ -281,20 +343,20 @@
             <div class="mt-4">
                 <h3 class="text-sm font-semibold text-base-content/80 mb-3 flex items-center gap-2">
                     <i data-lucide="zap" class="w-4 h-4"></i>
-                    WebSocket Performance
+                    Rendimiento de WebSocket
                 </h3>
                 <div class="grid grid-cols-2 gap-2">
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="settingWsCoalescing" class="toggle toggle-primary toggle-sm">
-                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Event Coalescing</span>
-                        <div class="tooltip" data-tip="Groups Move/Health events per entity per frame.">
+                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Agrupación de eventos</span>
+                        <div class="tooltip" data-tip="Agrupa eventos de movimiento/salud por entidad y por frame.">
                             <i data-lucide="info" class="w-3 h-3 opacity-50"></i>
                         </div>
                     </label>
                     <label class="flex items-center gap-2 p-2 rounded bg-base-300 cursor-pointer group hover:bg-base-300/70">
                         <input type="checkbox" id="settingWsThrottling" class="toggle toggle-primary toggle-sm">
-                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Health Throttling</span>
-                        <div class="tooltip" data-tip="Limits health updates to 20/sec per entity.">
+                        <span class="text-base-content/80 text-xs group-hover:text-base-content">Limitación de actualizaciones de salud</span>
+                        <div class="tooltip" data-tip="Limita las actualizaciones de salud a 20 por segundo por entidad.">
                             <i data-lucide="info" class="w-3 h-3 opacity-50"></i>
                         </div>
                     </label>
@@ -305,9 +367,9 @@
             <div class="mt-4 flex items-center gap-4">
                 <button id="downloadLogsBtn" class="btn btn-primary btn-sm">
                     <i data-lucide="download" class="w-4 h-4"></i>
-                    Export Debug Data
+                    Exportar datos de depuración
                 </button>
-                <span class="text-xs text-base-content/50">Download settings and session info as JSON</span>
+                <span class="text-xs text-base-content/50">Descargar configuración e información de la sesión como JSON</span>
             </div>
         </div>
     </div>
@@ -317,10 +379,31 @@
         <input type="checkbox" id="collapse-network"/>
         <div class="collapse-title text-xl font-semibold flex items-center gap-2">
             <i data-lucide="wifi" class="w-5 h-5 text-primary"></i>
-            Network
+            Red
         </div>
         <div class="collapse-content">
-            <div id="network-section" class="text-base-content/80">Loading network configuration…</div>
+            <div id="network-section" class="text-base-content/80">Cargando configuración de red…</div>
+        </div>
+    </div>
+
+
+    <!-- Configuration portability -->
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h2 class="text-xl font-semibold text-base-content mb-3 flex items-center gap-2">
+                <i data-lucide="package-open" class="w-5 h-5 text-accent"></i>
+                Copia de configuración
+            </h2>
+            <p class="text-sm text-base-content/60 mb-3">Exporta o importa únicamente preferencias de OpenRadar; no toca otros datos del navegador.</p>
+            <div class="flex flex-wrap gap-3">
+                <button id="exportSettingsBtn" class="btn btn-outline btn-primary btn-sm">
+                    <i data-lucide="download" class="w-4 h-4"></i> Exportar configuración
+                </button>
+                <label class="btn btn-outline btn-secondary btn-sm">
+                    <i data-lucide="upload" class="w-4 h-4"></i> Importar configuración
+                    <input id="importSettingsInput" type="file" accept="application/json,.json" class="hidden">
+                </label>
+            </div>
         </div>
     </div>
 
@@ -329,16 +412,16 @@
         <div class="card-body">
             <h2 class="text-lg font-semibold text-error mb-3 flex items-center gap-2">
                 <i data-lucide="alert-octagon" class="w-5 h-5"></i>
-                Danger Zone
+                Zona de peligro
             </h2>
             <div class="flex flex-wrap gap-3">
                 <button id="resetSettingsBtn" class="btn btn-outline btn-error btn-sm">
                     <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-                    Reset All Settings
+                    Restablecer toda la configuración
                 </button>
                 <button id="clearCacheBtn" class="btn btn-outline btn-ghost btn-sm">
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
-                    Clear Cache
+                    Borrar caché
                 </button>
             </div>
         </div>
@@ -349,9 +432,23 @@
 {{define "scripts/settings"}}
 <script>
     (async function () {
-        const {registerPage, reinitCurrentPage} = await import('/scripts/core/PageController.js');
+        const {registerPage} = await import('/scripts/core/PageController.js');
 
         let cleanup = [];
+
+        const OPENRADAR_KEY_PREFIXES = ['setting', 'category', 'collapse-'];
+        const OPENRADAR_EXACT_KEYS = new Set(['sidebarCollapsed', 'logLevel']);
+
+        function isOpenRadarStorageKey(key) {
+            return OPENRADAR_EXACT_KEYS.has(key) || OPENRADAR_KEY_PREFIXES.some(prefix => key.startsWith(prefix));
+        }
+
+        function getOpenRadarStorage() {
+            return Object.keys(localStorage).reduce((acc, key) => {
+                if (isOpenRadarStorageKey(key)) acc[key] = localStorage.getItem(key);
+                return acc;
+            }, {});
+        }
 
         async function initSettingsPage() {
             const settingsSync = window.settingsSync;
@@ -427,20 +524,52 @@
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.checked = settingsSync.getBool(id);
+
+                const isLocalControl = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
+                if (!isLocalControl) {
+                    el.disabled = true;
+                    el.title = 'Los cambios del backend sólo están disponibles desde http://localhost:5001';
+                    return;
+                }
+
                 addListener(el, "change", async (e) => {
                     const checked = e.target.checked;
-                    settingsSync.setBool(id, checked);
+                    const previous = !checked;
+                    el.disabled = true;
                     try {
-                        await fetch(endpoint, {
+                        const resp = await fetch(endpoint, {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({[fieldName]: checked})
                         });
+                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        settingsSync.setBool(id, checked);
                     } catch (err) {
+                        el.checked = previous;
+                        settingsSync.setBool(id, previous);
                         console.warn(`[Settings] POST ${endpoint} failed:`, err);
+                        window.toast?.error('No se pudo guardar el cambio en el backend');
+                    } finally {
+                        el.disabled = false;
                     }
                 });
             }
+
+            // Quick profiles
+            const profileSelect = document.getElementById('settingQuickProfile');
+            const savedProfile = settingsSync.get('settingActiveProfile', 'gathering');
+            if (profileSelect) profileSelect.value = savedProfile;
+            addListener(document.getElementById('applyQuickProfile'), 'click', async () => {
+                try {
+                    const {applyRadarProfile} = await import('/scripts/utils/RadarProfiles.js');
+                    const profile = applyRadarProfile(profileSelect?.value || 'gathering');
+                    if (window.toast) window.toast.success(`Perfil ${profile.label} aplicado`);
+                    setTimeout(() => location.reload(), 250);
+                } catch (err) {
+                    window.logger?.error(window.CATEGORIES?.SYSTEM, 'ProfileApplyFailed', {error: err?.message});
+                    if (window.toast) window.toast.error('No se pudo aplicar el perfil');
+                }
+            });
 
             const loggingSettings = await fetchBackendSettings('/api/settings/logging');
             if (loggingSettings) {
@@ -458,6 +587,19 @@
             bindCheckbox("settingResourceClusters");
             bindNumber("settingClusterRadius", 30);
             bindNumber("settingClusterMinSize", 2);
+            if (settingsSync.get("settingAutoClusterRadius") === null) settingsSync.setBool("settingAutoClusterRadius", true);
+            bindCheckbox("settingAutoClusterRadius");
+
+            // Rendering performance
+            if (settingsSync.get("settingTargetFps") === null) settingsSync.setNumber("settingTargetFps", 30);
+            if (settingsSync.get("settingReduceWhenHidden") === null) settingsSync.setBool("settingReduceWhenHidden", true);
+            const targetFps = document.getElementById('settingTargetFps');
+            if (targetFps) {
+                targetFps.value = String(settingsSync.getNumber('settingTargetFps', 30));
+                addListener(targetFps, 'change', () => settingsSync.setNumber('settingTargetFps', Number(targetFps.value)));
+            }
+            bindCheckbox("settingReduceWhenHidden");
+            bindCheckbox("settingCompactMode");
 
             // Category filters (Logging section)
             bindCheckbox("categorySystem");
@@ -494,10 +636,7 @@
                         screenResolution: `${window.screen.width}x${window.screen.height}`,
                         language: navigator.language
                     },
-                    localStorage: Object.keys(localStorage).reduce((acc, key) => {
-                        if (key.startsWith('setting')) acc[key] = localStorage.getItem(key);
-                        return acc;
-                    }, {})
+                    localStorage: getOpenRadarStorage()
                 };
 
                 const blob = new Blob([JSON.stringify(debugData, null, 2)], {type: 'application/json'});
@@ -509,15 +648,56 @@
                 URL.revokeObjectURL(url);
             });
 
+            // Configuration export/import
+            addListener(document.getElementById('exportSettingsBtn'), 'click', () => {
+                const payload = {
+                    schema: 1,
+                    version: '2.3ESP_Deox',
+                    exportedAt: new Date().toISOString(),
+                    settings: getOpenRadarStorage()
+                };
+                const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `OpenRadar-2.3ESP_Deox-config-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+
+            addListener(document.getElementById('importSettingsInput'), 'change', async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                    if (file.size > 512 * 1024) throw new Error('El archivo supera 512 KB');
+                    const parsed = JSON.parse(await file.text());
+                    if (parsed?.schema !== undefined && parsed.schema !== 1) throw new Error(`Esquema no compatible: ${parsed.schema}`);
+                    const imported = parsed?.settings ?? parsed;
+                    if (!imported || typeof imported !== 'object' || Array.isArray(imported)) throw new Error('Formato inválido');
+                    let count = 0;
+                    for (const [key, value] of Object.entries(imported)) {
+                        if (!isOpenRadarStorageKey(key) || typeof value !== 'string') continue;
+                        localStorage.setItem(key, value);
+                        count++;
+                    }
+                    if (window.toast) window.toast.success(`${count} preferencias importadas`);
+                    setTimeout(() => location.reload(), 300);
+                } catch (err) {
+                    if (window.toast) window.toast.error(`Configuración inválida: ${err.message}`);
+                } finally {
+                    e.target.value = '';
+                }
+            });
+
             // Reset settings - using DaisyUI modal
             addListener(document.getElementById("resetSettingsBtn"), "click", () => {
                 document.getElementById('modal-resetSettings').showModal();
             });
 
             addListener(document.getElementById("confirmResetSettings"), "click", () => {
-                localStorage.clear();
+                Object.keys(localStorage).filter(isOpenRadarStorageKey).forEach(key => localStorage.removeItem(key));
                 document.getElementById('modal-resetSettings').close();
-                if (window.toast) window.toast.success('Settings reset successfully');
+                if (window.toast) window.toast.success('Configuración restablecida correctamente');
                 setTimeout(() => location.reload(), 500);
             });
 
@@ -527,11 +707,11 @@
             });
 
             addListener(document.getElementById("confirmClearCache"), "click", () => {
-                caches.keys().then(names => {
-                    names.forEach(name => caches.delete(name));
-                });
+                if ('caches' in window) {
+                    caches.keys().then(names => names.forEach(name => caches.delete(name)));
+                }
                 document.getElementById('modal-clearCache').close();
-                if (window.toast) window.toast.success('Cache cleared');
+                if (window.toast) window.toast.success('Caché borrada');
             });
 
             // Network section: dynamic interface selection
@@ -557,9 +737,6 @@
             registerPage('settings', {init: initSettingsPage, destroy: destroySettingsPage});
             window._settingsPageRegistered = true;
         }
-
-        // Wait for globals (settingsSync) to be ready before reinitializing
-        window.onGlobalsReady(() => reinitCurrentPage());
     })();
 </script>
 {{end}}

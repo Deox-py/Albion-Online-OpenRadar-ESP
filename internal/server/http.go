@@ -38,6 +38,7 @@ type HTTPServer struct {
 	networkAPI  *NetworkAPI
 	settingsAPI *SettingsAPI
 	alertAPI    *AlertAPI
+	lanAccess   bool
 }
 
 // buildID fingerprints the embedded assets. It is empty for an unversioned build,
@@ -73,6 +74,7 @@ func NewHTTPServer(
 	appDir string,
 	recorder Recorder,
 	captureDir string,
+	lanAccess bool,
 ) (*HTTPServer, error) {
 	// Extract subdirectories from embed.FS (they include the folder path)
 	imagesFS, err := fs.Sub(images, "web/images")
@@ -116,9 +118,16 @@ func NewHTTPServer(
 		tmpl:      tmpl,
 		version:   version,
 		assetID:   buildID(version, buildTime),
+		lanAccess: lanAccess,
 	}
 	if mgr != nil {
-		s.networkAPI = NewNetworkAPI(mgr, allInterfaces, appDir, capture.LANAddresses)
+		lanProvider := func() []string {
+			if !lanAccess {
+				return nil
+			}
+			return capture.LANAddresses()
+		}
+		s.networkAPI = NewNetworkAPI(mgr, allInterfaces, appDir, lanProvider)
 	}
 	s.settingsAPI = NewSettingsAPI(appDir, log, recorder, captureDir)
 	s.alertAPI = NewAlertAPI(newAlertPlayer(s.sounds))
@@ -138,6 +147,7 @@ func NewHTTPServerDev(
 	allInterfaces []capture.NetworkInterface,
 	recorder Recorder,
 	captureDir string,
+	lanAccess bool,
 ) (*HTTPServer, error) {
 	// Initialize template engine in dev mode (hot reload)
 	tmplDir := appDir + "/internal/templates"
@@ -161,9 +171,16 @@ func NewHTTPServerDev(
 		version:   version,
 		assetID:   buildID(version, buildTime),
 		devMode:   true,
+		lanAccess: lanAccess,
 	}
 	if mgr != nil {
-		s.networkAPI = NewNetworkAPI(mgr, allInterfaces, appDir, capture.LANAddresses)
+		lanProvider := func() []string {
+			if !lanAccess {
+				return nil
+			}
+			return capture.LANAddresses()
+		}
+		s.networkAPI = NewNetworkAPI(mgr, allInterfaces, appDir, lanProvider)
 	}
 	s.settingsAPI = NewSettingsAPI(appDir, log, recorder, captureDir)
 	s.alertAPI = NewAlertAPI(newAlertPlayer(s.sounds))
@@ -215,7 +232,7 @@ func (s *HTTPServer) setupRoutes() {
 	if s.networkAPI != nil {
 		s.networkAPI.Register(apiMux)
 	}
-	s.mux.Handle("/api/", noStore(apiMux))
+	s.mux.Handle("/api/", noStore(localMutationsOnly(apiMux)))
 }
 
 func noStore(h http.Handler) http.Handler {
@@ -225,17 +242,55 @@ func noStore(h http.Handler) http.Handler {
 	})
 }
 
+const maxAPIWriteBody = 64 << 10 // 64 KiB; current JSON control requests are tiny.
+
+// localMutationsOnly keeps LAN access useful for read-only monitoring while
+// preventing another device on the local network from changing capture/logging
+// settings or triggering host-side actions. Use localhost on the host PC for
+// controls that write to the backend.
+func localMutationsOnly(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			h.ServeHTTP(w, r)
+			return
+		}
+
+		if !isLoopback(r.RemoteAddr) {
+			http.Error(w, "backend changes are only allowed from localhost", http.StatusForbidden)
+			return
+		}
+
+		r.Body = http.MaxBytesReader(w, r.Body, maxAPIWriteBody)
+		h.ServeHTTP(w, r)
+	})
+}
+
+// securityHeaders applies browser hardening suitable for the fully local UI.
+// Inline scripts/styles are currently required by the SSR templates, but all
+// network-capable resource types remain restricted to this OpenRadar origin.
+func securityHeaders(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'")
+		h.ServeHTTP(w, r)
+	})
+}
+
 // renderPage renders a page template
 func (s *HTTPServer) renderPage(w http.ResponseWriter, r *http.Request, page string) {
 	// Get page title
 	titles := map[string]string{
 		"radar":      "Radar",
-		"players":    "Players",
-		"resources":  "Resources",
-		"enemies":    "Enemies",
-		"chests":     "Chests",
-		"ignorelist": "Ignore List",
-		"settings":   "Settings",
+		"players":    "Jugadores",
+		"resources":  "Recursos",
+		"enemies":    "Enemigos",
+		"chests":     "Cofres",
+		"ignorelist": "Lista de ignorados",
+		"settings":   "Configuración",
 	}
 	title := titles[page]
 	if title == "" && page != "" {
@@ -399,10 +454,14 @@ func setContentType(w http.ResponseWriter, path string) {
 
 // Start starts the HTTP server
 func (s *HTTPServer) Start() error {
-	addr := fmt.Sprintf(":%d", s.port)
+	host := "127.0.0.1"
+	if s.lanAccess {
+		host = ""
+	}
+	addr := fmt.Sprintf("%s:%d", host, s.port)
 	s.server = &http.Server{
 		Addr:              addr,
-		Handler:           s.mux,
+		Handler:           securityHeaders(s.mux),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,

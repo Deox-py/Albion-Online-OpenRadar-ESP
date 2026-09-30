@@ -52,7 +52,7 @@ async function loadDatabaseWithRetry(database, path, name, ...extraArgs) {
 
 function showDatabaseError(databaseName, error) {
     if (window.toast) {
-        window.toast.error(`Failed to load ${databaseName} database`);
+        window.toast.error(`No se pudo cargar la base de datos ${databaseName}`);
     }
 
     // Also create a DOM notification for persistent visibility
@@ -60,13 +60,13 @@ function showDatabaseError(databaseName, error) {
     notification.className = 'error-notification';
     notification.innerHTML = `
         <div class="error-content">
-            <h3>Database Loading Failed</h3>
-            <p>Unable to load <strong>${databaseName}</strong> database.</p>
+            <h3>Error al cargar la base de datos</h3>
+            <p>No se pudo cargar <strong>${databaseName}</strong> database.</p>
             <p class="error-details">${error.message}</p>
             <div class="error-actions">
-                <button onclick="location.reload()">Reload Page</button>
+                <button onclick="location.reload()">Recargar página</button>
                 <button onclick="this.parentElement.parentElement.parentElement.remove()">
-                    Continue Anyway
+                    Continuar de todos modos
                 </button>
             </div>
         </div>

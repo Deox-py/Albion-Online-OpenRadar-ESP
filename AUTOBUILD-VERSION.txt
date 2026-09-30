@@ -1,0 +1,2 @@
+OpenRadar 2.3ESP_Deox AutoBuild V5
+Fixes ESLint no-empty in _WebSocketManager.test.js after V4 achieved 819/819 tests.

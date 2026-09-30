@@ -7,7 +7,7 @@
     if (pc) pc.dataset.page = '{{.Page}}';
 
     // Update document title
-    document.title = '{{.Title}}';
+    document.title = 'OpenRadar - {{if eq .Page "radar"}}Radar{{else if eq .Page "players"}}Jugadores{{else if eq .Page "resources"}}Recursos{{else if eq .Page "enemies"}}Enemigos{{else if eq .Page "chests"}}Cofres{{else if eq .Page "ignorelist"}}Lista de ignorados{{else if eq .Page "settings"}}Configuración{{else}}OpenRadar{{end}}';
 
     // Update sidebar active states
     var pages = {

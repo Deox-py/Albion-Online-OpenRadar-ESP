@@ -3,23 +3,23 @@
     <!-- Page Header -->
     <div class="card bg-base-200">
         <div class="card-body">
-            <h1 class="text-3xl font-bold text-base-content">Ignore List</h1>
-            <p class="text-base-content/60 mt-2">Manage players that won't trigger alerts or be shown on radar.</p>
+            <h1 class="text-3xl font-bold text-base-content">Lista de ignorados</h1>
+            <p class="text-base-content/60 mt-2">Gestiona jugadores que no activarán alertas ni aparecerán en el radar.</p>
         </div>
     </div>
 
     <!-- Add Player -->
     <div class="card bg-base-200">
         <div class="card-body">
-            <h2 class="text-xl font-semibold text-base-content mb-4">Add Player</h2>
+            <h2 class="text-xl font-semibold text-base-content mb-4">Añadir jugador</h2>
             <div class="flex gap-3">
                 <input type="text"
                        id="ignorePlayerInput"
-                       placeholder="Enter player name..."
+                       placeholder="Introduce el nombre del jugador..."
                        class="input input-bordered flex-1">
-                <button id="addIgnoreBtn" class="btn btn-primary">Add</button>
+                <button id="addIgnoreBtn" class="btn btn-primary">Añadir</button>
             </div>
-            <p class="text-xs text-base-content/50 mt-2">Players on this list will not trigger sound alerts or screen flashes. A player name, a guild name or an alliance name all work.</p>
+            <p class="text-xs text-base-content/50 mt-2">Los jugadores de esta lista no activarán alertas de sonido ni destellos de pantalla. Puedes usar un nombre de jugador, gremio o alianza.</p>
         </div>
     </div>
 
@@ -27,14 +27,14 @@
     <div class="card bg-base-200">
         <div class="card-body">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl font-semibold text-base-content">Ignored Players</h2>
+                <h2 class="text-xl font-semibold text-base-content">Jugadores ignorados</h2>
                 <span id="ignoreCount" class="badge badge-ghost font-mono">0</span>
             </div>
 
             <div id="ignoreListContainer" class="space-y-2">
                 <!-- Players will be rendered here -->
                 <p id="emptyIgnoreList" class="text-base-content/50 text-center py-8 italic">
-                    No players on ignore list
+                    No hay jugadores en la lista de ignorados
                 </p>
             </div>
         </div>
@@ -45,7 +45,7 @@
 {{define "scripts/ignorelist"}}
 <script>
     (async function () {
-        const {registerPage, reinitCurrentPage} = await import('/scripts/core/PageController.js');
+        const {registerPage} = await import('/scripts/core/PageController.js');
 
         let cleanup = [];
 
@@ -101,7 +101,7 @@
                     div.innerHTML = `
                     <span class="text-base-content font-medium">${escapeHtml(name)}</span>
                     <button class="remove-btn btn btn-ghost btn-xs text-error opacity-0 group-hover:opacity-100 transition-opacity">
-                        Remove
+                        Quitar
                     </button>
                 `;
                     div.querySelector('.remove-btn').addEventListener('click', () => {
@@ -149,8 +149,6 @@
             registerPage('ignorelist', {init: initIgnoreListPage, destroy: destroyIgnoreListPage});
             window._ignorelistPageRegistered = true;
         }
-
-        window.onGlobalsReady(() => reinitCurrentPage());
     })();
 </script>
 {{end}}

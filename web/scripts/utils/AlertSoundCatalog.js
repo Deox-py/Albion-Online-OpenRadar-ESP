@@ -1,14 +1,14 @@
 export const DEFAULT_SOUND = 'player.wav';
 
 export const ALERT_SOUNDS = [
-    {file: 'player.wav', label: 'Default'},
-    {file: 'brass.wav', label: 'Brass'},
-    {file: 'buzzer.wav', label: 'Buzzer'},
-    {file: 'coin.wav', label: 'Coin'},
-    {file: 'drums.wav', label: 'Drums'},
+    {file: 'player.wav', label: 'Predeterminado'},
+    {file: 'brass.wav', label: 'Metales'},
+    {file: 'buzzer.wav', label: 'Zumbador'},
+    {file: 'coin.wav', label: 'Moneda'},
+    {file: 'drums.wav', label: 'Batería'},
     {file: 'piano.wav', label: 'Piano'},
     {file: 'pop.wav', label: 'Pop'},
-    {file: 'vibraphone.wav', label: 'Vibraphone'},
+    {file: 'vibraphone.wav', label: 'Vibráfono'},
 ];
 
 export function findSound(file) {

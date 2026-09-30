@@ -21,7 +21,8 @@ export class RadarRenderer {
         this.previousTime = performance.now();
         this.animationFrameId = null;
 
-        this.TARGET_FPS = 30;
+        this.DEFAULT_TARGET_FPS = 30;
+        this.TARGET_FPS = this.DEFAULT_TARGET_FPS;
         this.FRAME_TIME = 1000 / this.TARGET_FPS;
         this.CLUSTER_UPDATE_INTERVAL = 2000;
         this.lastFrameTime = 0;
@@ -86,6 +87,14 @@ export class RadarRenderer {
         this.animationFrameId = requestAnimationFrame(() => this.gameLoop());
 
         const currentTime = performance.now();
+
+        // Target FPS is user-configurable. When the tab is hidden we reduce the
+        // render rate automatically to avoid wasting CPU while keeping state live.
+        const configuredFps = Math.max(15, Math.min(60, settingsSync.getNumber('settingTargetFps', this.DEFAULT_TARGET_FPS)));
+        const reduceWhenHidden = settingsSync.getBool('settingReduceWhenHidden', true);
+        const effectiveFps = (reduceWhenHidden && document.hidden) ? Math.min(configuredFps, 10) : configuredFps;
+        this.TARGET_FPS = effectiveFps;
+        this.FRAME_TIME = 1000 / effectiveFps;
 
         const elapsed = currentTime - this.lastFrameTime;
         if (elapsed < this.FRAME_TIME) return;
@@ -203,10 +212,18 @@ export class RadarRenderer {
                 try {
                     const merged = this._collectClusterCandidates();
 
+                    const baseRadius = settingsSync.getNumber('settingClusterRadius', 30);
+                    const adaptive = settingsSync.getBool('settingAutoClusterRadius', true);
+                    const zoom = Math.max(0.25, settingsSync.getFloat('settingRadarZoom') || 1);
+                    // At low zoom, group more aggressively; at high zoom, split clusters
+                    // for a cleaner and more useful map. Keep the multiplier bounded.
+                    const zoomFactor = adaptive ? Math.max(0.65, Math.min(1.8, 1 / zoom)) : 1;
+                    const effectiveRadius = baseRadius * zoomFactor;
+
                     this.cachedClusters = this.drawingUtils.detectClusters(
                         merged,
-                        settingsSync.getNumber('settingClusterRadius'),
-                        settingsSync.getNumber('settingClusterMinSize')
+                        effectiveRadius,
+                        settingsSync.getNumber('settingClusterMinSize', 2)
                     );
                     this.lastClusterUpdate = currentTime;
                 } catch (e) {
@@ -422,9 +439,9 @@ export class RadarRenderer {
 
         const stats = [];
         if (settingsSync.getBool('settingShowPlayers')) {
-            stats.push({ emoji: '👥', count: playerCount, label: 'players', color: '#ffffff' });
+            stats.push({ emoji: '👥', count: playerCount, label: 'jugadores', color: '#ffffff' });
         }
-        stats.push({ emoji: '📦', count: resourceCount, label: 'resources', color: '#00d4ff' });
+        stats.push({ emoji: '📦', count: resourceCount, label: 'recursos', color: '#00d4ff' });
         stats.push({ emoji: '👾', count: mobCount, label: 'mobs', color: '#ff6b6b' });
 
         const canvasSize = ctx.canvas.width;

@@ -49,20 +49,34 @@ type LogMsg struct {
 }
 
 type StatsMsg struct {
-	Packets       uint64
-	Errors        uint64
-	WsClients     int
-	MemoryMB      float64
-	MemorySysMB   float64
-	Goroutines    int
-	WsBatches     uint64
-	WsMessages    uint64
-	WsQueueSize   int
-	BytesReceived uint64
-	BytesSent     uint64
-	LogEntries    uint64
-	LogBatches    uint64
-	LogBufferSize int
+	Packets            uint64
+	Errors             uint64
+	Encrypted          uint64
+	TopParseReason     string
+	TopParseCount      uint64
+	LastParseReason    string
+	LastPayloadLen     int
+	PcapReceived       uint64
+	PcapDropped        uint64
+	PcapIfDropped      uint64
+	PcapStatsErrors    uint64
+	WsReadErrors       uint64
+	WsWriteFailures    uint64
+	WsNormalCloses     uint64
+	WsQueueDrops       uint64
+	WsNoClientMessages uint64
+	WsClients          int
+	MemoryMB           float64
+	MemorySysMB        float64
+	Goroutines         int
+	WsBatches          uint64
+	WsMessages         uint64
+	WsQueueSize        int
+	BytesReceived      uint64
+	BytesSent          uint64
+	LogEntries         uint64
+	LogBatches         uint64
+	LogBufferSize      int
 }
 
 type StatusMsg struct {
@@ -124,13 +138,27 @@ type Dashboard struct {
 	captureRunning bool
 
 	// Real-time stats
-	packets     uint64
-	errors      uint64
-	wsClients   int
-	memoryMB    float64
-	memorySysMB float64
-	goroutines  int
-	startTime   time.Time
+	packets            uint64
+	errors             uint64
+	encrypted          uint64
+	topParseReason     string
+	topParseCount      uint64
+	lastParseReason    string
+	lastPayloadLen     int
+	pcapReceived       uint64
+	pcapDropped        uint64
+	pcapIfDropped      uint64
+	pcapStatsErrors    uint64
+	wsReadErrors       uint64
+	wsWriteFailures    uint64
+	wsNormalCloses     uint64
+	wsQueueDrops       uint64
+	wsNoClientMessages uint64
+	wsClients          int
+	memoryMB           float64
+	memorySysMB        float64
+	goroutines         int
+	startTime          time.Time
 
 	// WebSocket batching stats
 	wsBatches   uint64
@@ -177,13 +205,13 @@ type Dashboard struct {
 
 // NewDashboard creates a new dashboard model
 func NewDashboard(version string, port int, devMode bool, lanAddresses []string, captures []CaptureSummary) Dashboard {
-	mode := "Production"
+	mode := "Producción"
 	if devMode {
-		mode = "Development"
+		mode = "Desarrollo"
 	}
 
 	ti := textinput.New()
-	ti.Placeholder = "Search logs..."
+	ti.Placeholder = "Buscar registros..."
 	ti.CharLimit = 50
 
 	d := Dashboard{
@@ -355,6 +383,20 @@ func (d Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		d.packets = msg.Packets
 		d.errors = msg.Errors
+		d.encrypted = msg.Encrypted
+		d.topParseReason = msg.TopParseReason
+		d.topParseCount = msg.TopParseCount
+		d.lastParseReason = msg.LastParseReason
+		d.lastPayloadLen = msg.LastPayloadLen
+		d.pcapReceived = msg.PcapReceived
+		d.pcapDropped = msg.PcapDropped
+		d.pcapIfDropped = msg.PcapIfDropped
+		d.pcapStatsErrors = msg.PcapStatsErrors
+		d.wsReadErrors = msg.WsReadErrors
+		d.wsWriteFailures = msg.WsWriteFailures
+		d.wsNormalCloses = msg.WsNormalCloses
+		d.wsQueueDrops = msg.WsQueueDrops
+		d.wsNoClientMessages = msg.WsNoClientMessages
 		d.wsClients = msg.WsClients
 		d.memoryMB = msg.MemoryMB
 		d.memorySysMB = msg.MemorySysMB
@@ -363,9 +405,11 @@ func (d Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d.wsMessages = msg.WsMessages
 		d.wsQueueSize = msg.WsQueueSize
 
-		// Traffic stats (per second)
-		d.rxPerSec = msg.BytesReceived - d.lastBytesReceived
-		d.txPerSec = msg.BytesSent - d.lastBytesSent
+		// Traffic stats (per second). Capture handles may be reconfigured, which
+		// can make their aggregate byte counter decrease. Treat that as a counter
+		// reset instead of allowing uint64 subtraction to wrap to a huge value.
+		d.rxPerSec = counterDelta(msg.BytesReceived, d.lastBytesReceived)
+		d.txPerSec = counterDelta(msg.BytesSent, d.lastBytesSent)
 		d.lastBytesReceived = msg.BytesReceived
 		d.lastBytesSent = msg.BytesSent
 		d.bytesReceived = msg.BytesReceived
@@ -479,9 +523,9 @@ func (d *Dashboard) renderLogs() string {
 	logs := d.filterLogs()
 	if len(logs) == 0 {
 		if d.searchQuery != "" {
-			return TimestampStyle.Render(fmt.Sprintf("  No logs matching '%s'", d.searchQuery))
+			return TimestampStyle.Render(fmt.Sprintf("  Sin registros que coincidan con '%s'", d.searchQuery))
 		}
-		return TimestampStyle.Render("  Waiting for logs...")
+		return TimestampStyle.Render("  Esperando registros...")
 	}
 
 	lines := make([]string, len(logs))
@@ -498,7 +542,7 @@ func (d Dashboard) View() string {
 	}
 
 	if !d.ready {
-		return "Initializing..."
+		return "Inicializando..."
 	}
 
 	header := d.renderHeader()
@@ -528,8 +572,8 @@ func (d *Dashboard) renderHeader() string {
 	status := fmt.Sprintf("%s %s %s", httpStatus, wsStatus, captureStatus)
 
 	// Mode and capture interfaces
-	mode := ModeStyle.Render("Mode: " + d.mode)
-	captureLine := "Capture: " + formatCaptureLine(d.captureInterfaces)
+	mode := ModeStyle.Render("Modo: " + d.mode)
+	captureLine := "Captura: " + formatCaptureLine(d.captureInterfaces)
 	adapter := TimestampStyle.Render(captureLine)
 
 	httpLine := d.serverURL
@@ -542,7 +586,7 @@ func (d *Dashboard) renderHeader() string {
 	wsURL := URLStyle.Render(wsLine)
 
 	// Started time
-	startedAt := TimestampStyle.Render("Started: " + d.startTime.Format(time.TimeOnly))
+	startedAt := TimestampStyle.Render("Inicio: " + d.startTime.Format(time.TimeOnly))
 
 	// Tabs
 	tabs := d.renderTabs()
@@ -556,12 +600,16 @@ func (d *Dashboard) renderHeader() string {
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", spacing), right)
 	headerContent := lipgloss.JoinVertical(lipgloss.Left, row, tabs)
+	if d.captureStatus == "awaiting_interfaces" {
+		warn := LogWarnStyle.Render("⚠ CAPTURA EN ESPERA — selecciona al menos una interfaz en Configuración → Red")
+		headerContent = lipgloss.JoinVertical(lipgloss.Left, row, warn, tabs)
+	}
 
 	return HeaderStyle.Width(d.width).Render(headerContent)
 }
 
 func (d *Dashboard) renderTabs() string {
-	tabs := []string{"[1] Logs", "[2] Stats", "[3] Config"}
+	tabs := []string{"[1] Registros", "[2] Estadísticas", "[3] Config"}
 	rendered := make([]string, len(tabs))
 
 	for i, tab := range tabs {
@@ -591,14 +639,14 @@ func (d *Dashboard) renderFooter() string {
 	// Stats line 1: Packets & Memory
 	stats1 := fmt.Sprintf(
 		"%s %s %s  |  %s %s  %s %s  |  %s %s",
-		StatLabelStyle.Render("Pkts:"),
+		StatLabelStyle.Render("Paq:"),
 		StatValueStyle.Render(formatNumber(d.packets)),
 		packetsSparkline,
 		StatLabelStyle.Render("Heap:"),
 		StatValueStyle.Render(fmt.Sprintf("%.0fMB", d.memoryMB)),
 		StatLabelStyle.Render("Sys:"),
 		StatValueStyle.Render(fmt.Sprintf("%.0fMB", d.memorySysMB)),
-		StatLabelStyle.Render("Up:"),
+		StatLabelStyle.Render("Act:"),
 		StatValueStyle.Render(formatDuration(uptime)),
 	)
 
@@ -619,16 +667,16 @@ func (d *Dashboard) renderFooter() string {
 	filterStr := d.getFilterString()
 	scrollStr := ""
 	if !d.autoScroll {
-		scrollStr = " | " + ModeStyle.Render("PAUSED")
+		scrollStr = " | " + ModeStyle.Render("PAUSA")
 	}
 	if d.searchQuery != "" {
-		scrollStr += " | " + URLStyle.Render("Search: "+d.searchQuery)
+		scrollStr += " | " + URLStyle.Render("Buscar: "+d.searchQuery)
 	}
 	statusLine := filterStr + scrollStr
 
 	// Help
 	help := HelpStyle.Render(
-		"q:quit  r:restart  p:pause  c:clear  f:filter  /:search  tab:switch  ↑↓:scroll",
+		"q:salir  r:reiniciar  p:pausa  c:limpiar  f:filtro  /:buscar  tab:cambiar  ↑↓:desplazar",
 	)
 
 	// Search input if active
@@ -647,22 +695,21 @@ func (d *Dashboard) renderFooter() string {
 func (d *Dashboard) getFilterString() string {
 	switch d.logFilter {
 	case LevelInfo:
-		return LogInfoStyle.Render("Filter: INFO")
+		return LogInfoStyle.Render("Filtro: INFO")
 	case LevelSuccess:
-		return LogSuccessStyle.Render("Filter: SUCCESS")
+		return LogSuccessStyle.Render("Filtro: SUCCESS")
 	case LevelWarn:
-		return LogWarnStyle.Render("Filter: WARN")
+		return LogWarnStyle.Render("Filtro: WARN")
 	case LevelError:
-		return LogErrorStyle.Render("Filter: ERROR")
+		return LogErrorStyle.Render("Filtro: ERROR")
 	default:
-		return StatLabelStyle.Render("Filter: ALL")
+		return StatLabelStyle.Render("Filtro: TODOS")
 	}
 }
 
 func (d *Dashboard) renderStatsView() string {
 	uptime := time.Since(d.startTime).Round(time.Second)
 
-	// Calculate derived metrics
 	avgMsgsPerBatch := float64(0)
 	if d.wsBatches > 0 {
 		avgMsgsPerBatch = float64(d.wsMessages) / float64(d.wsBatches)
@@ -680,10 +727,9 @@ func (d *Dashboard) renderStatsView() string {
 		batchesPerSec = float64(d.wsBatchHistory[len(d.wsBatchHistory)-1])
 	}
 
-	// Fixed-width stat helper
-	labelStyle := StatLabelStyle.Width(12).Align(lipgloss.Right)
+	labelStyle := StatLabelStyle.Width(15).Align(lipgloss.Right)
 	valStyle := func(color lipgloss.Color) lipgloss.Style {
-		return lipgloss.NewStyle().Bold(true).Foreground(color).Width(12)
+		return lipgloss.NewStyle().Bold(true).Foreground(color).Width(15)
 	}
 	stat := func(label, value string, color lipgloss.Color) string {
 		return fmt.Sprintf(" %s %s", labelStyle.Render(label), valStyle(color).Render(value))
@@ -692,55 +738,101 @@ func (d *Dashboard) renderStatsView() string {
 		return fmt.Sprintf(" %s %s", icon, TitleStyle.Render(title))
 	}
 
-	// Left column: Server, WebSocket, Traffic
-	leftLines := []string{
-		section("📊", "Server"),
-		stat("Uptime:", formatDuration(uptime), ColorHighlight),
-		stat("Packets:", formatNumber(d.packets), ColorSuccess),
-		stat("Pkts/sec:", fmt.Sprintf("%.0f", packetsPerSec), ColorPrimary),
-		stat("Errors:", formatNumber(d.errors), d.getErrorColor(errorRate)),
-		stat("Err rate:", fmt.Sprintf("%.2f%%", errorRate), d.getErrorColor(errorRate)),
-		"",
-		section("🔌", "WebSocket"),
-		stat("Clients:", strconv.Itoa(d.wsClients), ColorPrimary),
-		stat("Batches:", formatNumber(d.wsBatches), ColorSuccess),
-		stat("Batch/s:", fmt.Sprintf("%.0f", batchesPerSec), ColorPrimary),
-		stat("Messages:", formatNumber(d.wsMessages), ColorSuccess),
-		stat("Avg/batch:", fmt.Sprintf("%.1f", avgMsgsPerBatch), ColorWarning),
-		stat("Queue:", strconv.Itoa(d.wsQueueSize), d.getQueueColor()),
-		"",
-		section("📡", "Traffic"),
-		stat("RX total:", formatBytes(d.bytesReceived), ColorPrimary),
-		stat("RX/sec:", formatBytes(d.rxPerSec)+"/s", ColorSuccess),
-		stat("TX total:", formatBytes(d.bytesSent), ColorPrimary),
-		stat("TX/sec:", formatBytes(d.txPerSec)+"/s", ColorWarning),
+	topParse := "—"
+	if d.topParseReason != "" {
+		topParse = fmt.Sprintf("%s (%s)", d.topParseReason, formatNumber(d.topParseCount))
+	}
+	lastParse := "—"
+	if d.lastParseReason != "" {
+		lastParse = fmt.Sprintf("%s / %d B", d.lastParseReason, d.lastPayloadLen)
 	}
 
-	// Right column: Sparklines + Logging
+	leftLines := []string{
+		section("📊", "Servidor"),
+		stat("Tiempo activo:", formatDuration(uptime), ColorHighlight),
+		stat("Paquetes:", formatNumber(d.packets), ColorSuccess),
+		stat("Paq/seg:", fmt.Sprintf("%.0f", packetsPerSec), ColorPrimary),
+		stat("Errores parser:", formatNumber(d.errors), d.getErrorColor(errorRate)),
+		stat("Tasa error:", fmt.Sprintf("%.2f%%", errorRate), d.getErrorColor(errorRate)),
+		stat("Cifrados:", formatNumber(d.encrypted), ColorWarning),
+		"",
+		section("🧪", "Diagnóstico de captura"),
+		stat("PCAP recibidos:", formatNumber(d.pcapReceived), ColorSuccess),
+		stat("PCAP perdidos:", formatNumber(d.pcapDropped), d.getDropColor(d.pcapDropped)),
+		stat("IF perdidos:", formatNumber(d.pcapIfDropped), d.getDropColor(d.pcapIfDropped)),
+		stat("Stats fallos:", formatNumber(d.pcapStatsErrors), d.getDropColor(d.pcapStatsErrors)),
+		stat("Error principal:", truncateText(topParse, 22), ColorWarning),
+		stat("Último error:", truncateText(lastParse, 22), ColorWarning),
+		"",
+		section("📡", "Tráfico"),
+		stat("RX total:", formatBytes(d.bytesReceived), ColorPrimary),
+		stat("RX/seg:", formatBytes(d.rxPerSec)+"/s", ColorSuccess),
+		stat("TX total:", formatBytes(d.bytesSent), ColorPrimary),
+		stat("TX/seg:", formatBytes(d.txPerSec)+"/s", ColorWarning),
+	}
+
 	rightLines := []string{
-		section("📈", "Packets/s"),
+		section("🔌", "WebSocket"),
+		stat("Clientes:", strconv.Itoa(d.wsClients), ColorPrimary),
+		stat("Lotes:", formatNumber(d.wsBatches), ColorSuccess),
+		stat("Lotes/seg:", fmt.Sprintf("%.0f", batchesPerSec), ColorPrimary),
+		stat("Mensajes:", formatNumber(d.wsMessages), ColorSuccess),
+		stat("Prom/lote:", fmt.Sprintf("%.1f", avgMsgsPerBatch), ColorWarning),
+		stat("Cola:", strconv.Itoa(d.wsQueueSize), d.getQueueColor()),
+		stat("Cierres normales:", formatNumber(d.wsNormalCloses), ColorSuccess),
+		stat("Errores lectura:", formatNumber(d.wsReadErrors), d.getDropColor(d.wsReadErrors)),
+		stat("Fallos escritura:", formatNumber(d.wsWriteFailures), d.getDropColor(d.wsWriteFailures)),
+		stat("Drops de cola:", formatNumber(d.wsQueueDrops), d.getDropColor(d.wsQueueDrops)),
+		stat("Sin cliente:", formatNumber(d.wsNoClientMessages), ColorMuted),
+		"",
+		section("📈", "Paquetes/seg"),
 		" " + renderSparkline(d.packetsHistory, ColorPrimary),
 		" " + d.getSparklineStats(d.packetsHistory, ""),
 		"",
-		section("🧠", "Heap MB"),
-		" " + renderSparkline(d.memoryHistory, ColorWarning),
-		" " + d.getSparklineStatsFloat(d.memoryHistory, ""),
+		section("🧠", "Memoria"),
+		" Heap " + renderSparkline(d.memoryHistory, ColorWarning),
+		" " + d.getSparklineStatsFloat(d.memoryHistory, "MB"),
+		" Sys  " + renderSparkline(d.memorySysHistory, ColorError),
+		" " + d.getSparklineStatsFloat(d.memorySysHistory, "MB"),
 		"",
-		section("💾", "Sys MB"),
-		" " + renderSparkline(d.memorySysHistory, ColorError),
-		" " + d.getSparklineStatsFloat(d.memorySysHistory, ""),
-		"",
-		section("📝", "Logging"),
-		stat("Entries:", formatNumber(d.logEntries), ColorSuccess),
-		stat("Batches:", formatNumber(d.logBatches), ColorPrimary),
+		section("📝", "Registros"),
+		stat("Entradas:", formatNumber(d.logEntries), ColorSuccess),
+		stat("Lotes:", formatNumber(d.logBatches), ColorPrimary),
 		stat("Buffer:", strconv.Itoa(d.logBufferSize), ColorWarning),
 	}
 
 	colWidth := (d.width - 4) / 2
 	leftCol := lipgloss.NewStyle().Width(colWidth).Render(strings.Join(leftLines, "\n"))
 	rightCol := lipgloss.NewStyle().Width(colWidth).Render(strings.Join(rightLines, "\n"))
-
 	return lipgloss.JoinHorizontal(lipgloss.Top, " ", leftCol, " ", rightCol)
+}
+
+func counterDelta(current, previous uint64) uint64 {
+	if current >= previous {
+		return current - previous
+	}
+	return current
+}
+
+func (d *Dashboard) getDropColor(v uint64) lipgloss.Color {
+	if v > 100 {
+		return ColorError
+	}
+	if v > 0 {
+		return ColorWarning
+	}
+	return ColorSuccess
+}
+
+func truncateText(v string, maxLen int) string {
+	r := []rune(v)
+	if len(r) <= maxLen {
+		return v
+	}
+	if maxLen <= 1 {
+		return string(r[:maxLen])
+	}
+	return string(r[:maxLen-1]) + "…"
 }
 
 func (d *Dashboard) getErrorColor(rate float64) lipgloss.Color {
@@ -763,7 +855,7 @@ func (d *Dashboard) getQueueColor() lipgloss.Color {
 
 func (d *Dashboard) getSparklineStats(data []uint64, unit string) string {
 	if len(data) == 0 {
-		return StatLabelStyle.Render("No data")
+		return StatLabelStyle.Render("Sin datos")
 	}
 	lo, hi, avg := float64(slices.Min(data)), float64(slices.Max(data)), avgVal(data)
 	return StatLabelStyle.Render(fmt.Sprintf("min: %.0f  avg: %.0f  max: %.0f %s", lo, avg, hi, unit))
@@ -771,7 +863,7 @@ func (d *Dashboard) getSparklineStats(data []uint64, unit string) string {
 
 func (d *Dashboard) getSparklineStatsFloat(data []float64, unit string) string {
 	if len(data) == 0 {
-		return StatLabelStyle.Render("No data")
+		return StatLabelStyle.Render("Sin datos")
 	}
 	lo, hi, avg := float64(slices.Min(data)), float64(slices.Max(data)), avgVal(data)
 	return StatLabelStyle.Render(fmt.Sprintf("min: %.1f  avg: %.1f  max: %.1f %s", lo, avg, hi, unit))
@@ -790,43 +882,40 @@ func (d *Dashboard) renderConfigView() string {
 		return fmt.Sprintf(" %s %s", keyStyle.Render(key), StatLabelStyle.Render(desc))
 	}
 
-	// Left column: Configuration
 	leftLines := []string{
-		section("⚙️", "Configuration"),
-		cfgLine("Version:", d.version, StatValueStyle),
-		cfgLine("Mode:", d.mode, ModeStyle),
-		cfgLine("HTTP URL:", d.serverURL, URLStyle),
-		cfgLine("WS URL:", d.wsURL, URLStyle),
-		cfgLine("Capture:", formatCaptureLine(d.captureInterfaces), StatValueStyle),
+		section("⚙️", "Configuración"),
+		cfgLine("Versión:", d.version, StatValueStyle),
+		cfgLine("Modo:", d.mode, ModeStyle),
+		cfgLine("HTTP:", d.serverURL, URLStyle),
+		cfgLine("WS:", d.wsURL, URLStyle),
+		cfgLine("Captura:", formatCaptureLine(d.captureInterfaces), StatValueStyle),
 		cfgLine("LAN:", strings.Join(d.lanAddresses, ", "), StatValueStyle),
 		"",
-		section("ℹ️", "About"),
-		cfgLine("", "OpenRadar - Albion Online", StatLabelStyle),
-		cfgLine("", "Real-time packet radar", StatLabelStyle),
+		section("ℹ️", "Acerca de"),
+		cfgLine("", "OpenRadar 2.3ESP_Deox", StatLabelStyle),
+		cfgLine("", "Radar de paquetes en tiempo real", StatLabelStyle),
 	}
 
-	// Right column: Keyboard shortcuts (single column for alignment)
 	rightLines := []string{
-		section("⌨️", "Shortcuts"),
-		keyLine("q", "Quit application"),
-		keyLine("r", "Restart application"),
-		keyLine("p", "Toggle auto-scroll"),
-		keyLine("c", "Clear logs"),
-		keyLine("f", "Cycle log filter"),
-		keyLine("/", "Search logs"),
-		keyLine("↑↓", "Scroll logs"),
-		keyLine("g/G", "Go to top/bottom"),
-		keyLine("1-3", "Switch tabs"),
-		keyLine("tab", "Next tab"),
+		section("⌨️", "Atajos"),
+		keyLine("q", "Salir"),
+		keyLine("r", "Reiniciar aplicación"),
+		keyLine("p", "Alternar auto-desplazamiento"),
+		keyLine("c", "Limpiar registros"),
+		keyLine("f", "Cambiar filtro de registros"),
+		keyLine("/", "Buscar registros"),
+		keyLine("↑↓", "Desplazar registros"),
+		keyLine("g/G", "Ir al inicio/final"),
+		keyLine("1-3", "Cambiar pestaña"),
+		keyLine("tab", "Siguiente pestaña"),
 		"",
-		section("📋", "Log Levels"),
+		section("📋", "Niveles de registro"),
 		" " + LogInfoStyle.Render("INFO") + " " + LogSuccessStyle.Render("SUCCESS") + " " + LogWarnStyle.Render("WARN") + " " + LogErrorStyle.Render("ERROR"),
 	}
 
 	colWidth := (d.width - 4) / 2
 	leftCol := lipgloss.NewStyle().Width(colWidth).Render(strings.Join(leftLines, "\n"))
 	rightCol := lipgloss.NewStyle().Width(colWidth).Render(strings.Join(rightLines, "\n"))
-
 	return lipgloss.JoinHorizontal(lipgloss.Top, " ", leftCol, " ", rightCol)
 }
 
@@ -913,7 +1002,7 @@ func formatBytes(b uint64) string {
 
 func formatCaptureLine(summaries []CaptureSummary) string {
 	if len(summaries) == 0 {
-		return "(awaiting)"
+		return "(en espera)"
 	}
 	parts := make([]string, 0, len(summaries))
 	for _, c := range summaries {

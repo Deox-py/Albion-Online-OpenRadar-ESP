@@ -97,7 +97,7 @@ export class ZonesDatabase {
     // Red zones are lethal full-loot; Mists entered from them are lethal black, not red.
     const inheritedPvpType = origin.pvpType === "red" ? "black" : origin.pvpType;
     this.overrides.set(String(mistMapId), {
-      name: isAbbey ? `Knightfall Abbey (Mist of ${origin.name})` : `Mist of ${origin.name}`,
+      name: isAbbey ? `Knightfall Abbey (Niebla de ${origin.name})` : `Niebla de ${origin.name}`,
       type: "MISTS",
       pvpType: forcedPvpType || inheritedPvpType,
       tier: 0,

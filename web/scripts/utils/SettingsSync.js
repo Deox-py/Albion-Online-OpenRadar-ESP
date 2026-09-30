@@ -11,7 +11,10 @@ export class SettingsSync {
 
         this._boundMessageHandler = (event) => this.handleMessage(event.data);
         this._boundStorageHandler = (event) => {
-            if (event.key && event.newValue !== null) {
+            if (!event.key) return;
+            if (event.newValue === null) {
+                this.handleMessage({ type: 'setting-removed', key: event.key, value: null });
+            } else {
                 this.handleMessage({ type: 'setting-changed', key: event.key, value: event.newValue });
             }
         };
@@ -53,7 +56,11 @@ export class SettingsSync {
             if (data.type === 'setting-changed') {
                 this.cache.set(data.key, data.value);
             } else {
-                this.cache.delete(data.key);
+                // Keep an explicit tombstone. In a real cross-tab storage event the
+                // shared localStorage entry is already gone, but caching null also
+                // makes synthetic events/tests deterministic and prevents a stale
+                // value from being re-read before storage catches up.
+                this.cache.set(data.key, null);
             }
 
             const listeners = this.listeners.get(data.key) || [];

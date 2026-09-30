@@ -1,7 +1,7 @@
 {
   "name": "albion-openradar",
-  "version": "2.2.2",
-  "description": "OpenRadar - Real-time radar for Albion Online (Go Backend)",
+  "version": "2.3.0-esp-deox",
+  "description": "OpenRadar 2.3ESP_Deox - radar en español con mejoras de UX, diagnóstico y estabilidad",
   "private": true,
   "type": "module",
   "scripts": {

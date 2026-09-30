@@ -9,19 +9,19 @@
     <div class="flex items-center justify-between p-4 border-b border-base-content/[0.03]">
         <a href="/" class="flex items-center gap-3 sidebar-expanded-only">
             <img src="/images/icon.png" alt="OpenRadar" class="w-10 h-10 rounded-lg">
-            <span class="text-xl font-bold text-base-content">OpenRadar</span>
+            <span class="text-xl font-bold text-base-content">OpenRadar <span class="text-primary">Deox</span></span>
         </a>
         <div class="flex flex-col items-center gap-2 w-full sidebar-collapsed-only">
             <img src="/images/icon.png" alt="OpenRadar" class="w-10 h-10 rounded-lg">
             <button onclick="window.sidebar.toggle()"
                 class="p-1.5 rounded-lg text-base-content/60 hover:text-base-content hover:bg-base-300 transition-colors"
-                title="Expand sidebar">
+                title="Expandir barra lateral">
                 <i data-lucide="panel-left-open" class="w-4 h-4"></i>
             </button>
         </div>
         <button onclick="window.sidebar.toggle()"
             class="p-2 rounded-lg text-base-content/60 hover:text-base-content hover:bg-base-300 transition-colors sidebar-expanded-only"
-            title="Collapse sidebar">
+            title="Contraer barra lateral">
             <i data-lucide="panel-left-close" class="w-5 h-5"></i>
         </button>
     </div>
@@ -34,13 +34,13 @@
            class="flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors
                   {{if .Active}}text-primary border-l-2 border-primary -ml-px pl-2.5{{else}}text-base-content/60 hover:text-base-content/80 hover:bg-base-content/[0.02]{{end}}">
             <i data-lucide="{{.Icon}}" class="w-[18px] h-[18px] flex-shrink-0" stroke-width="1.5"></i>
-            <span class="text-sm sidebar-expanded-only">{{.Label}}</span>
+            <span class="text-sm sidebar-expanded-only">{{if eq .Path "/"}}Radar{{else if eq .Path "/players"}}Jugadores{{else if eq .Path "/resources"}}Recursos{{else if eq .Path "/enemies"}}Enemigos{{else if eq .Path "/chests"}}Cofres{{else if eq .Path "/ignorelist"}}Lista de ignorados{{else if eq .Path "/settings"}}Configuración{{else}}{{.Label}}{{end}}</span>
         </a>
         {{end}}
     </nav>
 
     <div class="p-4 border-t border-base-content/[0.03] sidebar-expanded-only">
-        <p class="text-xs text-base-content/50 font-mono">v{{.Version}}</p>
+        <p class="text-xs text-base-content/50 font-mono">v{{.Version}} · 2.3ESP_Deox</p>
     </div>
 </aside>
 
@@ -50,7 +50,7 @@
     <div class="flex items-center justify-between p-4 border-b border-base-content/[0.03]">
         <a href="/" class="flex items-center gap-3">
             <img src="/images/icon.png" alt="OpenRadar" class="w-10 h-10 rounded-lg">
-            <span class="text-xl font-bold text-base-content">OpenRadar</span>
+            <span class="text-xl font-bold text-base-content">OpenRadar <span class="text-primary">Deox</span></span>
         </a>
         <button onclick="window.sidebar.closeMobile()"
             class="p-2 rounded-lg text-base-content/60 hover:text-base-content hover:bg-base-300 transition-colors">
@@ -67,13 +67,13 @@
            class="flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors
                   {{if .Active}}text-primary border-l-2 border-primary -ml-px pl-2.5{{else}}text-base-content/60 hover:text-base-content/80 hover:bg-base-content/[0.02]{{end}}">
             <i data-lucide="{{.Icon}}" class="w-[18px] h-[18px]" stroke-width="1.5"></i>
-            <span class="text-sm">{{.Label}}</span>
+            <span class="text-sm">{{if eq .Path "/"}}Radar{{else if eq .Path "/players"}}Jugadores{{else if eq .Path "/resources"}}Recursos{{else if eq .Path "/enemies"}}Enemigos{{else if eq .Path "/chests"}}Cofres{{else if eq .Path "/ignorelist"}}Lista de ignorados{{else if eq .Path "/settings"}}Configuración{{else}}{{.Label}}{{end}}</span>
         </a>
         {{end}}
     </nav>
 
     <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-base-content/[0.03]">
-        <p class="text-xs text-base-content/50 font-mono">v{{.Version}}</p>
+        <p class="text-xs text-base-content/50 font-mono">v{{.Version}} · 2.3ESP_Deox</p>
     </div>
 </aside>
 {{end}}

@@ -2,7 +2,7 @@ const BADGES = {
     wifi: '🛜', ethernet: '🔌', exitlag: '🚀', vpn: '🔒', virtual: '🧪', other: '•',
 };
 const BADGE_LABEL = {
-    wifi: 'WiFi', ethernet: 'Ethernet', exitlag: 'ExitLag', vpn: 'VPN', virtual: 'Virtual', other: 'Other',
+    wifi: 'WiFi', ethernet: 'Ethernet', exitlag: 'ExitLag', vpn: 'VPN', virtual: 'Virtual', other: 'Otros',
 };
 
 export class NetworkSettingsHandler {
@@ -18,7 +18,7 @@ export class NetworkSettingsHandler {
             fetch('/api/network/state'),
         ]);
         if (!ifacesRes.ok || !stateRes.ok) {
-            this.container.innerHTML = `<div class="alert alert-error">Failed to load network configuration.</div>`;
+            this.container.innerHTML = `<div class="alert alert-error">No se pudo cargar la configuración de red.</div>`;
             return;
         }
         this.interfaces = await ifacesRes.json();
@@ -37,16 +37,16 @@ export class NetworkSettingsHandler {
         this.container.innerHTML = `
             ${banner}
             ${this.renderExitLagNotice()}
-            <h3 class="text-base font-semibold mt-2">Capture interfaces</h3>
-            <p class="text-sm opacity-70 mb-2">Captured packets are merged across all checked interfaces. Tick at least one to start capture.</p>
+            <h3 class="text-base font-semibold mt-2">Interfaces de captura</h3>
+            <p class="text-sm opacity-70 mb-2">Los paquetes capturados se combinan entre todas las interfaces seleccionadas. Marca al menos una para iniciar la captura.</p>
             <div class="flex flex-col gap-1">${rows}</div>
             <div class="flex gap-2 mt-3">
-                <button class="btn btn-sm" data-action="refresh">Refresh list</button>
-                <button class="btn btn-sm btn-primary" data-action="apply" disabled>Apply changes</button>
+                <button class="btn btn-sm" data-action="refresh">Actualizar lista</button>
+                <button class="btn btn-sm btn-primary" data-action="apply" disabled>Aplicar cambios</button>
             </div>
-            <h3 class="text-base font-semibold mt-6">LAN access</h3>
-            <p class="text-sm opacity-70">Reachable from devices on the same local network. Independent of the capture interfaces above.</p>
-            <ul class="list-disc pl-5">${lan || '<li class="opacity-60">No LAN address detected.</li>'}</ul>
+            <h3 class="text-base font-semibold mt-6">Acceso LAN</h3>
+            <p class="text-sm opacity-70">Accesible desde dispositivos de la misma red local. Es independiente de las interfaces de captura seleccionadas arriba.</p>
+            <ul class="list-disc pl-5">${lan || '<li class="opacity-60">Acceso LAN desactivado. Inicia OpenRadar con <code>--lan</code> si realmente lo necesitas.</li>'}</ul>
         `;
         this.bindEvents();
     }
@@ -55,13 +55,13 @@ export class NetworkSettingsHandler {
         return `
             <div class="alert alert-info mb-2" data-exitlag-notice>
                 <div class="flex flex-col gap-1">
-                    <div class="font-semibold">Using ExitLag?</div>
+                    <div class="font-semibold">¿Usas ExitLag?</div>
                     <div class="text-sm">
-                        Open <strong>ExitLag &rarr; Settings &rarr; Advanced Options &rarr; Redirection method</strong>
-                        and select <strong>NDIS (legacy)</strong>.
+                        Abre <strong>ExitLag &rarr; Configuración &rarr; Opciones avanzadas &rarr; Método de redirección</strong>
+                        y selecciona <strong>NDIS (legacy)</strong>.
                     </div>
                     <div class="text-sm">
-                        The default WFP mode hides Albion's traffic from packet capture; the radar will see no packets.
+                        El modo WFP predeterminado oculta el tráfico de Albion de la captura de paquetes; el radar no verá ningún paquete.
                     </div>
                 </div>
             </div>
@@ -70,16 +70,16 @@ export class NetworkSettingsHandler {
 
     renderBanner() {
         if (this.state?.status === 'awaiting_interfaces') {
-            return `<div class="alert alert-warning mb-2">⚠ Capture not running. Pick at least one interface below to start.</div>`;
+            return `<div class="alert alert-warning mb-2">⚠ La captura no está activa. Selecciona al menos una interfaz para comenzar.</div>`;
         }
         const n = (this.state?.captureInterfaces ?? []).length;
-        return `<div class="alert alert-success mb-2">✓ Capturing on ${n} interface${n > 1 ? 's' : ''}.</div>`;
+        return `<div class="alert alert-success mb-2">✓ Capturando en ${n} ${n === 1 ? 'interfaz' : 'interfaces'}.</div>`;
     }
 
     renderRow(iface, checked) {
         const badge = BADGES[iface.category] ?? BADGES.other;
         const label = BADGE_LABEL[iface.category] ?? BADGE_LABEL.other;
-        const unavail = iface.isAvailable ? '' : ' <span class="opacity-60">(unavailable)</span>';
+        const unavail = iface.isAvailable ? '' : ' <span class="opacity-60">(no disponible)</span>';
         return `
             <label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-base-300/40" data-iface="${escapeHTML(iface.name)}">
                 <input type="checkbox" class="checkbox checkbox-sm" ${checked ? 'checked' : ''} ${iface.isAvailable ? '' : 'disabled'}>
@@ -126,14 +126,14 @@ export class NetworkSettingsHandler {
             });
             if (!res.ok) {
                 const txt = await res.text();
-                window.toast?.error?.(`Apply failed: ${txt}`);
+                window.toast?.error?.(`Error al aplicar: ${txt}`);
                 if (btn) btn.disabled = false;
                 return;
             }
-            window.toast?.success?.('Capture interfaces updated.');
+            window.toast?.success?.('Interfaces de captura actualizadas.');
             await this.load();
         } catch (err) {
-            window.toast?.error?.(`Network error: ${err.message ?? err}`);
+            window.toast?.error?.(`Error de red: ${err.message ?? err}`);
             if (btn) btn.disabled = false;
         }
     }
@@ -142,12 +142,12 @@ export class NetworkSettingsHandler {
         try {
             const r = await fetch('/api/network/refresh', {method: 'POST'});
             if (!r.ok) {
-                window.toast?.error?.('Refresh failed.');
+                window.toast?.error?.('Error al actualizar.');
                 return;
             }
             await this.load();
         } catch (err) {
-            window.toast?.error?.(`Refresh error: ${err.message ?? err}`);
+            window.toast?.error?.(`Error de actualización: ${err.message ?? err}`);
         }
     }
 }

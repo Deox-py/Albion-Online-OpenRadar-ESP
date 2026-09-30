@@ -4,7 +4,10 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -17,6 +20,9 @@ const (
 	MaxWebSocketClients = 100
 	BatchInterval       = 16 * time.Millisecond // ~60 fps
 	MaxBatchSize        = 100
+	MaxBatchQueue       = 2000 // hard cap so a slow/noisy client cannot grow memory without bound
+	MaxClientMessage    = 256 << 10
+	WebSocketWriteWait  = 5 * time.Second
 )
 
 // WSBatchMessage represents a batch of messages
@@ -37,10 +43,15 @@ func encodeBatch(batch []any) ([]byte, error) {
 
 // WSStats holds WebSocket statistics
 type WSStats struct {
-	BatchesSent   uint64
-	MessagesSent  uint64
-	MessagesQueue int
-	BytesSent     uint64
+	BatchesSent      uint64
+	MessagesSent     uint64
+	MessagesQueue    int
+	BytesSent        uint64
+	ReadErrors       uint64
+	WriteFailures    uint64
+	NormalCloses     uint64
+	QueueDrops       uint64
+	NoClientMessages uint64
 }
 
 // WebSocketHandler manages WebSocket connections and broadcasts
@@ -55,11 +66,35 @@ type WebSocketHandler struct {
 	batchMu     sync.Mutex
 	batchTicker *time.Ticker
 	stopBatch   chan struct{}
+	flushNow    chan struct{}
+	stopOnce    sync.Once
+	writeMu     sync.Mutex
 
-	// Stats
-	batchesSent  uint64
-	messagesSent uint64
-	bytesSent    uint64
+	// Stats. Atomics avoid races between the batch writer, connection readers,
+	// and the 1 Hz dashboard sampler.
+	batchesSent      atomic.Uint64
+	messagesSent     atomic.Uint64
+	bytesSent        atomic.Uint64
+	readErrors       atomic.Uint64
+	writeFailures    atomic.Uint64
+	normalCloses     atomic.Uint64
+	queueDrops       atomic.Uint64
+	noClientMessages atomic.Uint64
+}
+
+// sameOriginWebSocket rejects browser WebSocket requests originating from a
+// different site. This protects the localhost API from drive-by pages while
+// still allowing the local UI, LAN UI, and non-browser clients without Origin.
+func sameOriginWebSocket(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	return strings.EqualFold(u.Host, r.Host)
 }
 
 // NewWebSocketHandler creates a new WebSocket handler
@@ -69,10 +104,9 @@ func NewWebSocketHandler(log *logger.Logger) *WebSocketHandler {
 		logger:      log,
 		batchBuffer: make([]any, 0, MaxBatchSize),
 		stopBatch:   make(chan struct{}),
+		flushNow:    make(chan struct{}, 1),
 		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				return true
-			},
+			CheckOrigin: sameOriginWebSocket,
 		},
 	}
 	ws.startBatchTicker()
@@ -86,6 +120,8 @@ func (ws *WebSocketHandler) startBatchTicker() {
 			select {
 			case <-ws.batchTicker.C:
 				ws.flushBatch()
+			case <-ws.flushNow:
+				ws.flushBatch()
 			case <-ws.stopBatch:
 				ws.batchTicker.Stop()
 				return
@@ -95,20 +131,47 @@ func (ws *WebSocketHandler) startBatchTicker() {
 }
 
 func (ws *WebSocketHandler) flushBatch() {
+	for {
+		batch := ws.popBatch(MaxBatchSize)
+		if len(batch) == 0 {
+			return
+		}
+		ws.sendBatch(batch)
+		if len(batch) < MaxBatchSize {
+			return
+		}
+	}
+}
+
+func (ws *WebSocketHandler) popBatch(limit int) []any {
 	ws.batchMu.Lock()
+	defer ws.batchMu.Unlock()
 	if len(ws.batchBuffer) == 0 {
-		ws.batchMu.Unlock()
+		return nil
+	}
+	n := min(limit, len(ws.batchBuffer))
+	batch := make([]any, n)
+	copy(batch, ws.batchBuffer[:n])
+	ws.batchBuffer = ws.batchBuffer[n:]
+	if len(ws.batchBuffer) == 0 {
+		ws.batchBuffer = make([]any, 0, MaxBatchSize)
+	}
+	return batch
+}
+
+func (ws *WebSocketHandler) sendBatch(batch []any) {
+	msgCount := uint64(len(batch))
+	ws.clientsMu.RLock()
+	hasClients := len(ws.clients) > 0
+	ws.clientsMu.RUnlock()
+	if !hasClients {
+		ws.noClientMessages.Add(msgCount)
 		return
 	}
-	batch := ws.batchBuffer
-	msgCount := uint64(len(batch))
-	ws.batchBuffer = make([]any, 0, MaxBatchSize)
-	ws.batchMu.Unlock()
 
 	data, err := encodeBatch(batch)
 	if err != nil {
 		logger.PrintWarn("WS", "batch marshal failed: %v (batch size=%d, DROPPED)", err, msgCount)
-		// Try to identify which message failed by marshaling each one individually.
 		for i, m := range batch {
 			if _, err := json.Marshal(m, wsJSONOptions); err != nil {
 				logger.PrintWarn("WS", "  offending message[%d]: %v (type=%T, value=%+v)", i, err, m, m)
@@ -121,8 +184,13 @@ func (ws *WebSocketHandler) flushBatch() {
 	var failedClients []*websocket.Conn
 	var sentCount uint64
 
+	// gorilla/websocket permits one concurrent writer per connection. A single
+	// handler-level lock also serializes immediate full batches with ticker
+	// flushes and graceful shutdown close frames.
+	ws.writeMu.Lock()
 	ws.clientsMu.RLock()
 	for client := range ws.clients {
+		_ = client.SetWriteDeadline(time.Now().Add(WebSocketWriteWait))
 		if err := client.WriteMessage(websocket.TextMessage, data); err != nil {
 			failedClients = append(failedClients, client)
 		} else {
@@ -130,12 +198,13 @@ func (ws *WebSocketHandler) flushBatch() {
 		}
 	}
 	ws.clientsMu.RUnlock()
+	ws.writeMu.Unlock()
 
-	ws.batchesSent++
-	ws.messagesSent += msgCount
-	ws.bytesSent += dataLen * sentCount
-
+	ws.batchesSent.Add(1)
+	ws.messagesSent.Add(msgCount)
+	ws.bytesSent.Add(dataLen * sentCount)
 	if len(failedClients) > 0 {
+		ws.writeFailures.Add(uint64(len(failedClients)))
 		ws.clientsMu.Lock()
 		for _, client := range failedClients {
 			if _, exists := ws.clients[client]; exists {
@@ -154,10 +223,15 @@ func (ws *WebSocketHandler) Stats() WSStats {
 	ws.batchMu.Unlock()
 
 	return WSStats{
-		BatchesSent:   ws.batchesSent,
-		MessagesSent:  ws.messagesSent,
-		MessagesQueue: queueLen,
-		BytesSent:     ws.bytesSent,
+		BatchesSent:      ws.batchesSent.Load(),
+		MessagesSent:     ws.messagesSent.Load(),
+		MessagesQueue:    queueLen,
+		BytesSent:        ws.bytesSent.Load(),
+		ReadErrors:       ws.readErrors.Load(),
+		WriteFailures:    ws.writeFailures.Load(),
+		NormalCloses:     ws.normalCloses.Load(),
+		QueueDrops:       ws.queueDrops.Load(),
+		NoClientMessages: ws.noClientMessages.Load(),
 	}
 }
 
@@ -183,6 +257,7 @@ func (ws *WebSocketHandler) handleConnection(w http.ResponseWriter, r *http.Requ
 		logger.PrintWarn("WS", "Connection rejected: max clients reached (%d)", MaxWebSocketClients)
 		return
 	}
+	conn.SetReadLimit(MaxClientMessage)
 	ws.clients[conn] = true
 	clientCount := len(ws.clients)
 	ws.clientsMu.Unlock()
@@ -207,12 +282,18 @@ func (ws *WebSocketHandler) handleMessages(conn *websocket.Conn) {
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(
+			// Browsers commonly close a tab/reload without a close status (1005).
+			// Treat those as normal lifecycle noise instead of an application error.
+			if websocket.IsCloseError(
 				err,
+				websocket.CloseNormalClosure,
 				websocket.CloseGoingAway,
-				websocket.CloseAbnormalClosure,
+				websocket.CloseNoStatusReceived,
 			) {
-				logger.PrintError("WS", "Read error: %v", err)
+				ws.normalCloses.Add(1)
+			} else {
+				ws.readErrors.Add(1)
+				logger.PrintWarn("WS", "Read error: %v", err)
 			}
 			break
 		}
@@ -236,11 +317,13 @@ func parseClientLogs(message []byte) []any {
 
 // CloseAllClients closes all WebSocket connections gracefully
 func (ws *WebSocketHandler) CloseAllClients() {
-	close(ws.stopBatch)
+	ws.stopOnce.Do(func() { close(ws.stopBatch) })
 	ws.flushBatch() // Flush remaining events
 
+	ws.writeMu.Lock()
 	ws.clientsMu.Lock()
 	for client := range ws.clients {
+		_ = client.SetWriteDeadline(time.Now().Add(WebSocketWriteWait))
 		_ = client.WriteMessage(
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseGoingAway, "server shutting down"),
@@ -249,17 +332,33 @@ func (ws *WebSocketHandler) CloseAllClients() {
 		delete(ws.clients, client)
 	}
 	ws.clientsMu.Unlock()
+	ws.writeMu.Unlock()
 }
 
-// broadcastPayload adds a message to the batch buffer
+// broadcastPayload adds a message to the batch buffer without blocking the
+// packet-capture goroutine on WebSocket writes. Large bursts trigger an early
+// flush, while MaxBatchQueue provides a hard memory bound if clients are slow.
 func (ws *WebSocketHandler) broadcastPayload(code string, payload any) {
 	msg := map[string]any{
 		"code":       code,
 		"dictionary": payload,
 	}
 	ws.batchMu.Lock()
+	if len(ws.batchBuffer) >= MaxBatchQueue {
+		ws.batchMu.Unlock()
+		ws.queueDrops.Add(1)
+		return
+	}
 	ws.batchBuffer = append(ws.batchBuffer, msg)
+	shouldFlush := len(ws.batchBuffer) >= MaxBatchSize
 	ws.batchMu.Unlock()
+
+	if shouldFlush {
+		select {
+		case ws.flushNow <- struct{}{}:
+		default:
+		}
+	}
 }
 
 // BroadcastEvent broadcasts an event to all clients

@@ -20,7 +20,7 @@ function formatElapsedTime(detectedAt) {
 function renderGuildBadge(guildName) {
     return guildName
         ? `<span class="text-[11px] font-mono font-medium text-warning bg-warning/10 px-1.5 py-0.5 rounded border border-warning/20">[${guildName}]</span>`
-        : '<span class="text-[10px] text-base-content/30 italic">No Guild</span>';
+        : '<span class="text-[10px] text-base-content/30 italic">Sin gremio</span>';
 }
 
 function renderAllianceBadge(allianceName) {
@@ -32,18 +32,18 @@ function renderAllianceBadge(allianceName) {
 function renderPlayerTypeBadge(effectiveType, factionCityName) {
     if (effectiveType === 'passive') {
         return {
-            badge: `<span class="text-[9px] font-mono font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded border border-success/25 uppercase tracking-wide">Passive</span>`,
+            badge: `<span class="text-[9px] font-mono font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded border border-success/25 uppercase tracking-wide">Pasivo</span>`,
             color: 'success'
         };
     } else if (effectiveType === 'faction') {
-        const cityLabel = factionCityName ? `⚔ ${factionCityName}` : 'Faction';
+        const cityLabel = factionCityName ? `⚔ ${factionCityName}` : 'Facción';
         return {
             badge: `<span class="text-[9px] font-mono font-semibold text-info bg-info/10 px-1.5 py-0.5 rounded border border-info/25 uppercase tracking-wide">${cityLabel}</span>`,
             color: 'info'
         };
     }
     return {
-        badge: `<span class="text-[9px] font-mono font-semibold text-error bg-error/10 px-1.5 py-0.5 rounded border border-error/25 uppercase tracking-wide">Hostile</span>`,
+        badge: `<span class="text-[9px] font-mono font-semibold text-error bg-error/10 px-1.5 py-0.5 rounded border border-error/25 uppercase tracking-wide">Hostil</span>`,
         color: 'error'
     };
 }
