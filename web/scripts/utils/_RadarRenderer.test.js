@@ -15,11 +15,12 @@ vi.mock('./SettingsSync.js', () => ({
 vi.mock('./CanvasManager.js', () => ({
     CanvasManager: class { initialize() { return {contexts: {}}; } destroy() {} },
 }));
-vi.mock('../data/ZonesDatabase.js', () => ({default: {zones: {}}, ZonesDatabase: class {}}));
+vi.mock('../data/ZonesDatabase.js', () => ({default: {zones: {}, getZone: vi.fn(() => null)}, ZonesDatabase: class {}}));
 
 const {RadarRenderer} = await import('./RadarRenderer.js');
 const {EnemyType} = await import('../handlers/MobsHandler.js');
 const settingsSync = (await import('./SettingsSync.js')).default;
+const zonesDatabase = (await import('../data/ZonesDatabase.js')).default;
 
 function makeRenderer({harvestableList = [], mobsList = []} = {}) {
     return new RadarRenderer({
@@ -39,6 +40,72 @@ function allTrue() {
 function allFalse() {
     return {e0: Array(8).fill(false), e1: Array(8).fill(false), e2: Array(8).fill(false), e3: Array(8).fill(false), e4: Array(8).fill(false)};
 }
+
+describe('RadarRenderer.renderZoneInfo', () => {
+    function makeZoneCtx() {
+        return {
+            canvas: {width: 500, height: 500},
+            measureText: vi.fn(text => ({width: text.length * 6})),
+            fillRect: vi.fn(),
+            strokeRect: vi.fn(),
+            fillText: vi.fn(),
+            fillStyle: '',
+            strokeStyle: '',
+            lineWidth: 1,
+            font: '',
+            textAlign: '',
+            textBaseline: '',
+        };
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        zonesDatabase.getZone.mockReturnValue(null);
+    });
+
+    test('dynamic Mist shows stable Mists label instead of origin-zone name', () => {
+        zonesDatabase.getZone.mockReturnValue({
+            name: 'Niebla de Fort Sterling',
+            pvpType: 'yellow',
+            originZoneId: '1234',
+        });
+        const renderer = makeRenderer();
+        renderer.map = {id: '@MISTS@runtime-instance'};
+        const ctx = makeZoneCtx();
+
+        renderer.renderZoneInfo(ctx);
+
+        const text = ctx.fillText.mock.calls[0][0];
+        expect(text).toContain('Mists');
+        expect(text).not.toContain('Fort Sterling');
+    });
+
+    test('unknown map uses neutral status instead of safe-zone shield', () => {
+        const renderer = makeRenderer();
+        renderer.map = {id: 'UNKNOWN-RUNTIME-ZONE'};
+        const ctx = makeZoneCtx();
+
+        renderer.renderZoneInfo(ctx);
+
+        const text = ctx.fillText.mock.calls[0][0];
+        expect(text).toContain('Zona desconocida');
+        expect(text).toContain('?');
+        expect(ctx.strokeStyle).toBe('#94a3b8');
+    });
+
+    test('Knightfall runtime id is labelled Knightfall Abbey', () => {
+        zonesDatabase.getZone.mockReturnValue({name: 'Knightfall Abbey (Niebla de Bridgewatch)', pvpType: 'black'});
+        const renderer = makeRenderer();
+        renderer.map = {id: '@MISTSDUNGEON@runtime-instance'};
+        const ctx = makeZoneCtx();
+
+        renderer.renderZoneInfo(ctx);
+
+        const text = ctx.fillText.mock.calls[0][0];
+        expect(text).toContain('Knightfall Abbey');
+        expect(text).not.toContain('Bridgewatch');
+    });
+});
 
 describe('RadarRenderer._collectClusterCandidates', () => {
     beforeEach(() => {
