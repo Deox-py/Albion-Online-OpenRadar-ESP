@@ -45,7 +45,10 @@ export class MapDrawing extends DrawingUtils
 
         const preloadedImage = imageCache.GetPreloadedImage(src, "Maps");
 
-        if (preloadedImage === null) return;
+        if (preloadedImage === null) {
+            this._drawProceduralFallback(ctx);
+            return;
+        }
 
         if (preloadedImage)
         {
@@ -63,6 +66,10 @@ export class MapDrawing extends DrawingUtils
         }
         else
         {
+            // Keep the radar useful while an asset is loading or when a dynamic
+            // instance (for example a Mist) has no static background tile.
+            this._drawProceduralFallback(ctx);
+
             imageCache.preloadImageAndAddToList(src, "Maps")
             .then(() => {
                 window.logger?.info(CATEGORIES.MAP, 'map_loaded', {src: src});
@@ -71,5 +78,50 @@ export class MapDrawing extends DrawingUtils
                 window.logger?.warn(CATEGORIES.MAP, 'map_load_failed', {src: src, error: error?.message});
             });
         }
+    }
+
+    _drawProceduralFallback(ctx)
+    {
+        const width = ctx.canvas?.width ?? ctx.width ?? 500;
+        const height = ctx.canvas?.height ?? ctx.height ?? 500;
+        const step = Math.max(32, Math.round(Math.min(width, height) / 8));
+
+        ctx.save();
+
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.10)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash?.([2, 6]);
+
+        for (let x = step; x < width; x += step) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+        }
+
+        for (let y = step; y < height; y += step) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+        }
+
+        ctx.setLineDash?.([]);
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.18)';
+
+        const centerX = width / 2;
+        const centerY = height / 2;
+
+        ctx.beginPath();
+        ctx.moveTo(centerX, 0);
+        ctx.lineTo(centerX, height);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, centerY);
+        ctx.lineTo(width, centerY);
+        ctx.stroke();
+
+        ctx.restore();
     }
 }

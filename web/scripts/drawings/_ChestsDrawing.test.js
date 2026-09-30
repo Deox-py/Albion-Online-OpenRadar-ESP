@@ -75,6 +75,26 @@ describe('ChestsDrawing', () => {
         expect(drawing.DrawCustomImage).toHaveBeenCalledWith(ctx, 5, 5, 'green', 'Resources', 35);
     });
 
+    test('Mists GREEN zone tag is not misclassified as green chest rarity', () => {
+        settingsSync.getBool.mockImplementation(() => true);
+        drawing._drawUnknownChest = vi.fn();
+        const chest = {hX: 8, hY: 9, chestName: 'MISTS_GREEN_LOOTCHEST_TREASURE_MOBCAMP_02'};
+
+        drawing.invalidate(ctx, [chest]);
+
+        expect(drawing.DrawCustomImage).not.toHaveBeenCalled();
+        expect(drawing._drawUnknownChest).toHaveBeenCalledWith(ctx, 8, 9);
+    });
+
+    test('missing chestName does not crash and renders the neutral marker when filters are enabled', () => {
+        settingsSync.getBool.mockImplementation(() => true);
+        drawing._drawUnknownChest = vi.fn();
+        const chest = {hX: 3, hY: 4, chestName: undefined};
+
+        expect(() => drawing.invalidate(ctx, [chest])).not.toThrow();
+        expect(drawing._drawUnknownChest).toHaveBeenCalledWith(ctx, 3, 4);
+    });
+
     // @verified 2026-04-23: all settings off skip every chest entirely.
     test('all settings off skips every chest', () => {
         settingsSync.getBool.mockImplementation(() => false);
