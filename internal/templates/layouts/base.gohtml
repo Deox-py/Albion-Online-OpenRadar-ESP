@@ -1,10 +1,10 @@
 {{define "layouts/base.gohtml"}}
 <!DOCTYPE html>
-<html data-theme="night" lang="en">
+<html data-theme="night" lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title id="page-title">{{.Title}}</title>
+    <title id="page-title">OpenRadar - {{if eq .Page "radar"}}Radar{{else if eq .Page "players"}}Jugadores{{else if eq .Page "resources"}}Recursos{{else if eq .Page "enemies"}}Enemigos{{else if eq .Page "chests"}}Cofres{{else if eq .Page "ignorelist"}}Lista de ignorados{{else if eq .Page "settings"}}Configuración{{else}}OpenRadar{{end}}</title>
     <link rel="icon" type="image/x-icon" href="/images/favicon.ico">
 
     <link rel="stylesheet" href="/styles/tailwind.css">
@@ -29,6 +29,7 @@
     <script type="module">
         import { CATEGORIES } from '/scripts/constants/LoggerConstants.js';
         import settingsSync from '/scripts/utils/SettingsSync.js';
+        import {initDisplayMode} from '/scripts/utils/DisplayMode.js';
         import {
             attachCheckboxListeners,
             generateResourceGrid,
@@ -48,6 +49,8 @@
             selectAllTierEnchants,
             getResourceStorageKey
         };
+
+        initDisplayMode();
 
         window.__globalsReady = true;
         document.dispatchEvent(new CustomEvent('globalsReady'));

@@ -2,7 +2,7 @@ import {CATEGORIES} from '../constants/LoggerConstants.js';
 import settingsSync from './SettingsSync.js';
 import {DEFAULT_SOUND, findSound} from './AlertSoundCatalog.js';
 
-const UNAVAILABLE_MESSAGE = 'Threat sound unavailable. The machine running the radar could not play it.';
+const UNAVAILABLE_MESSAGE = 'Sonido de amenaza no disponible. El equipo que ejecuta el radar no pudo reproducirlo.';
 
 export class AlertSound {
     constructor() {

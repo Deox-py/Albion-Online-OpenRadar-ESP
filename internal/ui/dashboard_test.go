@@ -64,8 +64,8 @@ func TestFormatCaptureLine(t *testing.T) {
 		in   []CaptureSummary
 		want string
 	}{
-		{"nil", nil, "(awaiting)"},
-		{"empty slice", []CaptureSummary{}, "(awaiting)"},
+		{"nil", nil, "(en espera)"},
+		{"empty slice", []CaptureSummary{}, "(en espera)"},
 		{"one", []CaptureSummary{{Description: "Wi-Fi", Address: "10.0.0.1"}}, "Wi-Fi (10.0.0.1)"},
 		{"two", []CaptureSummary{
 			{Description: "Wi-Fi", Address: "10.0.0.1"},
@@ -115,13 +115,22 @@ func TestRenderSparkline(t *testing.T) {
 
 func TestSparklineStats(t *testing.T) {
 	d := NewDashboard("v0", 5001, true, nil, nil)
-	if got := d.getSparklineStats(nil, ""); !strings.Contains(got, "No data") {
-		t.Errorf("nil data = %q, want No data", got)
+	if got := d.getSparklineStats(nil, ""); !strings.Contains(got, "Sin datos") {
+		t.Errorf("nil data = %q, want Sin datos", got)
 	}
 	if got := d.getSparklineStats([]uint64{3, 1, 2}, "p/s"); !strings.Contains(got, "min: 1  avg: 2  max: 3 p/s") {
 		t.Errorf("uint64 stats = %q", got)
 	}
 	if got := d.getSparklineStatsFloat([]float64{1.5, 0.5}, "MB"); !strings.Contains(got, "min: 0.5  avg: 1.0  max: 1.5 MB") {
 		t.Errorf("float64 stats = %q", got)
+	}
+}
+
+func TestCounterDeltaHandlesCounterReset(t *testing.T) {
+	if got := counterDelta(150, 100); got != 50 {
+		t.Fatalf("normal delta=%d want 50", got)
+	}
+	if got := counterDelta(25, 100); got != 25 {
+		t.Fatalf("reset delta=%d want current value 25", got)
 	}
 }

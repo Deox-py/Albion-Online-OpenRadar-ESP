@@ -20,6 +20,16 @@ const (
 	StatusAwaiting Status = "awaiting_interfaces"
 )
 
+// AggregateStats summarizes libpcap kernel counters across every active capture
+// handle. These counters are diagnostic only; capture continues if a handle does
+// not expose stats on the current platform.
+type AggregateStats struct {
+	PacketsReceived  uint64
+	PacketsDropped   uint64
+	PacketsIfDropped uint64
+	ReadErrors       uint64
+}
+
 type CaptureSummary struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
@@ -186,6 +196,35 @@ func (m *Manager) BytesReceived() uint64 {
 		sum += mc.cap.BytesReceived()
 	}
 	return sum
+}
+
+// Stats aggregates pcap.Stats across all active interfaces. Keeping the manager
+// lock while sampling prevents a handle from being closed by Reconfigure at the
+// same time pcap.Stats is reading it.
+func (m *Manager) Stats() AggregateStats {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out AggregateStats
+	for _, mc := range m.active {
+		st, err := mc.cap.Stats()
+		if err != nil {
+			out.ReadErrors++
+			continue
+		}
+		if st == nil {
+			continue
+		}
+		if st.PacketsReceived > 0 {
+			out.PacketsReceived += uint64(st.PacketsReceived)
+		}
+		if st.PacketsDropped > 0 {
+			out.PacketsDropped += uint64(st.PacketsDropped)
+		}
+		if st.PacketsIfDropped > 0 {
+			out.PacketsIfDropped += uint64(st.PacketsIfDropped)
+		}
+	}
+	return out
 }
 
 func (m *Manager) State() State {

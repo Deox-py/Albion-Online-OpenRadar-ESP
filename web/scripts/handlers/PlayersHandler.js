@@ -302,7 +302,6 @@ export class PlayersHandler {
 
     Clear() {
         this.playersList = [];
-        this.alreadyIgnoredPlayers = [];
     }
 
     updatePlayerFaction(id, newFaction) {

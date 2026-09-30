@@ -126,7 +126,7 @@ describe('NetworkSettingsHandler', () => {
         const h = new NetworkSettingsHandler(container);
         await h.load();
 
-        expect(container.textContent).toContain('Capture not running');
+        expect(container.textContent).toContain('La captura no está activa');
     });
 
     test('shows success banner when capturing on N interfaces', async () => {
@@ -140,7 +140,7 @@ describe('NetworkSettingsHandler', () => {
         const h = new NetworkSettingsHandler(container);
         await h.load();
 
-        expect(container.textContent).toMatch(/Capturing on 2 interface/i);
+        expect(container.textContent).toMatch(/Capturando en 2 interfaces/i);
     });
 
     test('apply enables when current is non-empty and user clears selection', async () => {

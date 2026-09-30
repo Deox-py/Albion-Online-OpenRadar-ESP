@@ -29,12 +29,12 @@ describe('ZonesDatabase mist overrides', () => {
             pvpType: 'black',
             tier: 0,
             type: 'MISTS',
-            name: 'Mist of Battlebrae Flatland',
+            name: 'Niebla de Battlebrae Flatland',
             originZoneId: '3316'
         }));
         expect(zonesDatabase.getPvpType('@MISTS@9f9a62f3-c9a8-418c-9ad0-440580332ab5')).toBe('black');
         expect(zonesDatabase.getZoneName('@MISTS@9f9a62f3-c9a8-418c-9ad0-440580332ab5'))
-            .toBe('Mist of Battlebrae Flatland');
+            .toBe('Niebla de Battlebrae Flatland');
         expect(zonesDatabase.getZoneTier('@MISTS@9f9a62f3-c9a8-418c-9ad0-440580332ab5')).toBe(0);
     });
 
@@ -121,7 +121,7 @@ describe('ZonesDatabase mist overrides', () => {
     test('setMistOverride on a @MISTSDUNGEON@ id labels it as Knightfall Abbey', () => {
         zonesDatabase.setMistOverride('@MISTSDUNGEON@abc', '0220', 'yellow');
 
-        expect(zonesDatabase.getZoneName('@MISTSDUNGEON@abc')).toBe('Knightfall Abbey (Mist of Falsestep Marsh)');
+        expect(zonesDatabase.getZoneName('@MISTSDUNGEON@abc')).toBe('Knightfall Abbey (Niebla de Falsestep Marsh)');
         expect(zonesDatabase.getPvpType('@MISTSDUNGEON@abc')).toBe('yellow');
     });
 
@@ -129,7 +129,7 @@ describe('ZonesDatabase mist overrides', () => {
     test('setMistOverride on a plain @MISTS@ id keeps the Mist of X label', () => {
         zonesDatabase.setMistOverride('@MISTS@plain', '0220');
 
-        expect(zonesDatabase.getZoneName('@MISTS@plain')).toBe('Mist of Falsestep Marsh');
+        expect(zonesDatabase.getZoneName('@MISTS@plain')).toBe('Niebla de Falsestep Marsh');
     });
 
     // @verified 2026-05-12: source captures A/C/D op 473 param[2] discriminant.
@@ -139,7 +139,7 @@ describe('ZonesDatabase mist overrides', () => {
 
         expect(ok).toBe(true);
         expect(zonesDatabase.getPvpType('@MISTS@brec-letal')).toBe('black');
-        expect(zonesDatabase.getZoneName('@MISTS@brec-letal')).toBe('Mist of Brecilien');
+        expect(zonesDatabase.getZoneName('@MISTS@brec-letal')).toBe('Niebla de Brecilien');
     });
 
     // @verified 2026-05-12: backward compatibility check.

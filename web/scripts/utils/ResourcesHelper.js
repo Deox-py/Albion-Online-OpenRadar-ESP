@@ -122,11 +122,11 @@ export function attachCheckboxListeners() {
 export function generateResourceGrid(config) {
     const { prefix } = config;
     const isLiving = prefix.endsWith('lp');
-    const typeLabel = isLiving ? 'Living' : 'Static';
+    const typeLabel = isLiving ? 'Recurso viviente' : 'Recurso estático';
     const typeIcon = isLiving ? '🌿' : '⛏️';
 
     const buttons = Array.from({ length: 8 }, (_, i) =>
-        `<button onclick="selectAllTierEnchants('${prefix}', ${i})" class="btn btn-primary btn-xs text-[10px] w-full" title="Select all T${i+1}">✓T${i+1}</button>`
+        `<button onclick="selectAllTierEnchants('${prefix}', ${i})" class="btn btn-primary btn-xs text-[10px] w-full" title="Seleccionar todos los encantamientos de T${i+1}">✓T${i+1}</button>`
     ).join('');
 
     const tierHeaders = Array.from({ length: 8 }, (_, i) =>

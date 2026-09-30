@@ -201,11 +201,8 @@ export async function initRadar() {
         EventRouter.restoreMistOverrideFromSession();
         EventRouter.restoreMapFromSession();
 
-        WebSocketManager.setMessageCallback((data) => {
-            eventQueue.queueRawMessage(data);
-        });
-        WebSocketManager.connect();
-
+        // Prepare the event pipeline before opening the socket so an unusually
+        // fast first message can never arrive before the queue callback exists.
         eventQueue = getEventQueue();
         eventQueue.setFlushCallback((messageType, params) => {
             switch (messageType) {
@@ -220,6 +217,11 @@ export async function initRadar() {
                     break;
             }
         });
+
+        WebSocketManager.setMessageCallback((data) => {
+            eventQueue.queueRawMessage(data);
+        });
+        WebSocketManager.connect();
 
         initializeRadarRenderer();
         EventRouter.setRadarRenderer(radarRenderer);

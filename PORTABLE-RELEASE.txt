@@ -1,0 +1,35 @@
+OpenRadar 2.3ESP_Deox - Portable Release V4
+
+RESULTADO FINAL
+===============
+
+dist\OpenRadar-2.3ESP_Deox.exe
+
+Ese es el unico archivo que se comparte.
+
+ARRANQUE EN UN PC NUEVO
+=======================
+
+1. El launcher comprueba si Npcap esta instalado antes de iniciar el nucleo.
+2. Si falta, muestra una ventana y pregunta si el usuario quiere instalarlo.
+3. Si acepta, descarga Npcap directamente desde https://npcap.com/dist/
+   (actualmente Npcap 1.89), verifica la firma Authenticode y abre el
+   instalador de forma visible. Npcap NO va embebido ni se redistribuye.
+4. Cuando Npcap queda disponible, extrae el nucleo versionado a:
+
+   %LOCALAPPDATA%\OpenRadar-2.3ESP_Deox\bin\<hash>\OpenRadar-core.exe
+
+   y lo inicia.
+
+El usuario sigue recibiendo y abriendo un unico OpenRadar-2.3ESP_Deox.exe.
+
+DATOS DE USUARIO
+================
+%LOCALAPPDATA%\OpenRadar-2.3ESP_Deox\
+
+SEGURIDAD
+=========
+- Npcap se descarga del dominio oficial npcap.com.
+- El instalador se verifica mediante Authenticode antes de ejecutarlo.
+- No se instala silenciosamente: el instalador y UAC son visibles.
+- Si el usuario dice No, OpenRadar se cierra sin instalar nada.

@@ -614,15 +614,13 @@ describe('PlayersHandler', () => {
             expect(handler.playersList[0].id).toBe(2);
         });
 
-        // @verified 2026-04-18: Clear empties playersList and resets alreadyIgnoredPlayers.
-        test('synthetic: Clear empties playersList and resets alreadyIgnoredPlayers', () => {
+        // @verified 2026-09-30: Clear empties playersList.
+        test('synthetic: Clear empties playersList', () => {
             handler.handleNewPlayerEvent(1, {1: 'A', 8: '', 53: 0, 51: null, 40: [], 43: []});
-            handler.alreadyIgnoredPlayers = [{id: 1}];
 
             handler.Clear();
 
             expect(handler.getSize()).toBe(0);
-            expect(handler.alreadyIgnoredPlayers).toEqual([]);
         });
 
         // @verified 2026-04-18: cleanupStaleEntities removes players older than maxAgeMs and returns count.

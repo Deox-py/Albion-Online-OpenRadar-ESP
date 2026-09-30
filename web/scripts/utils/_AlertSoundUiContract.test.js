@@ -27,7 +27,7 @@ describe('alert sound ui contract', () => {
     test('the picker and its preview button are labelled and keyboard safe', () => {
         expect(playersTemplate).toContain('<label for="settingSoundFile"');
         expect(playersTemplate).toContain('<select id="settingSoundFile"');
-        expect(playersTemplate).toContain('aria-label="Play the selected alert sound"');
+        expect(playersTemplate).toContain('aria-label="Reproducir el sonido de alerta seleccionado"');
         expect(playersTemplate).toContain('addListener(previewEl, "click"');
         expect(playersTemplate).not.toContain('addListener(soundFileEl, "change", () => alertSound.preview');
     });

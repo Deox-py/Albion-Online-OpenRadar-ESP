@@ -4,7 +4,7 @@
 # Requirements:
 #   - GNU Make, bash (Git Bash on Windows)
 #   - Go 1.27+
-#   - Node 20+
+#   - Node 24+
 #   - Docker (only needed to build the non-native platform locally)
 #   - git, gh, git-cliff, golangci-lint (see `make install-tools`)
 # ============================================================================
@@ -17,13 +17,13 @@ HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null || true)
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-VERSION ?= $(if $(GIT_TAG),$(patsubst v%,%,$(GIT_TAG)),$(GIT_BRANCH)-$(GIT_COMMIT))
+VERSION ?= $(if $(GIT_TAG),$(patsubst v%,%,$(GIT_TAG)),2.3ESP_Deox)
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)
 
 DIST := dist
 
-.PHONY: help dev run css css-watch vendors test lint lint-fix clean \
+.PHONY: help dev run css css-watch vendors test lint lint-fix qa qa-static clean \
         install-tools assets restore-assets refresh-assets \
         update-ao-data download-icons download-spells download-map \
         refresh-codes gen-codes \
@@ -71,6 +71,8 @@ help: ## Display help
 	@echo "  test              Run Go + frontend tests"
 	@echo "  lint              Lint Go + frontend"
 	@echo "  lint-fix          Lint and auto-fix"
+	@echo "  qa                Run tests + lint"
+	@echo "  qa-static         Run offline static QA (no npm/Go deps required)"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  clean             Remove dist/ and compressed .gz files"
@@ -111,6 +113,12 @@ lint: ## Lint Go + frontend
 lint-fix: ## Lint and auto-fix
 	golangci-lint run --fix ./...
 	npm run lint:fix
+
+qa: test lint ## Run the complete quality gate
+	@echo "QA completed successfully for OpenRadar 2.3ESP_Deox"
+
+qa-static: ## Run offline static QA
+	python3 tools/qa-static.py
 
 # ============================================================================
 # Assets (prepares web/ao-bin-dumps/*.gz for go:embed)

@@ -64,3 +64,15 @@ body.mobile-menu-open .mobile-menu-overlay { opacity: 1; pointer-events: auto; }
     transition: transform var(--transition-slow);
 }
 body.mobile-menu-open .mobile-sidebar { transform: translateX(0); }
+
+/* 2.3ESP_Deox: compact radar mode */
+body.compact-mode #desktop-sidebar { display: none !important; }
+body.compact-mode #page-content { padding: 0.5rem !important; }
+body.compact-mode #page-content > .container { max-width: none !important; }
+body.compact-mode #playersSection { display: none !important; }
+body.compact-mode header { height: 2.75rem; }
+body.compact-mode .stagger > * { animation-delay: 0ms !important; }
+
+@media (min-width: 768px) {
+    body.compact-mode #page-content .container { width: 100%; }
+}

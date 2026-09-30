@@ -40,8 +40,8 @@ No client modification, no memory injection, no proxy. Passive listening only.
 1. Install [Npcap](https://npcap.com/#download).
 2. Download `OpenRadar-windows-amd64.exe` from
    [Releases](https://github.com/Nouuu/Albion-Online-OpenRadar/releases/latest).
-3. Run it. The startup banner prints a localhost URL and, when available, a `http://<your-lan-ip>:5001 (LAN)` one.
-4. Open **http://localhost:5001**, or the LAN URL from a phone on the same network.
+3. Run it. By default the web UI only listens on localhost.
+4. Open **http://localhost:5001**. To expose a read-only view to another device on your LAN, start the radar with `--lan` and use the LAN URL printed in the banner.
 5. Launch Albion.
 
 Interfaces are auto-selected. Change them from **Settings -> Network** in the browser.
@@ -85,6 +85,7 @@ sudo ln -s /usr/lib/libpcap.so /usr/lib/libpcap.so.0.8
 OpenRadar -version       # print version and exit
 OpenRadar -ip X.X.X.X    # one-shot interface override by IP (does not write network.json)
 OpenRadar -dev           # development mode (read assets from disk)
+OpenRadar --lan          # opt-in LAN access; backend mutations stay localhost-only
 ```
 
 Interface selection persists in `network.json` next to the binary. Edit it from **Settings -> Network**, or by hand for
@@ -126,8 +127,8 @@ hard-refresh the page (Ctrl+F5) after upgrading.
 
 ### Can two PCs share one radar?
 
-Yes. Run the binary on the PC that plays Albion, then open the `(LAN)` URL from the startup banner on the other device. The threat alert sound comes out of the PC running the radar, not the device showing the page.
-Capture settings stay locked to the host for safety, so the second device gets a read-only view.
+Yes. Start the binary with `--lan` on the PC that plays Albion, then open the `(LAN)` URL from the startup banner on the other device. The threat alert sound comes out of the PC running the radar, not the device showing the page.
+Backend-changing controls stay locked to localhost for safety, so the second device gets a read-only view.
 
 ### Is there a macOS build?
 

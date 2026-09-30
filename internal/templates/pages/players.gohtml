@@ -3,8 +3,8 @@
     <!-- Page Header -->
     <div class="card bg-base-200">
         <div class="card-body">
-            <h1 class="text-3xl font-bold text-base-content">Players</h1>
-            <p class="text-base-content/60 mt-2">Configure player detection and display settings.</p>
+            <h1 class="text-3xl font-bold text-base-content">Jugadores</h1>
+            <p class="text-base-content/60 mt-2">Configura la detección y visualización de jugadores.</p>
         </div>
     </div>
 
@@ -12,10 +12,10 @@
     <div role="alert" class="alert bg-info/20 border border-info/40">
         <i data-lucide="info" class="w-5 h-5 text-info"></i>
         <div>
-            <h3 class="font-bold text-info">Why can't I see players on the radar?</h3>
-            <p class="text-sm">The game only sends player names, not their positions. We can detect who enters your zone but cannot display them on the map.
+            <h3 class="font-bold text-info">¿Por qué no puedo ver jugadores en el radar?</h3>
+            <p class="text-sm">El juego sólo envía los nombres de los jugadores, no sus posiciones. Podemos detectar quién entra en tu zona, pero no mostrarlo en el mapa.
                 <a href="https://github.com/Nouuu/Albion-Online-OpenRadar/blob/main/docs/technical/PLAYER_POSITIONS_MITM.md"
-                   target="_blank" rel="noopener noreferrer" class="link link-primary">Learn more</a>
+                   target="_blank" rel="noopener noreferrer" class="link link-primary">Más información</a>
             </p>
         </div>
     </div>
@@ -25,38 +25,38 @@
         <div class="card-body">
             <h2 class="text-xl font-semibold text-base-content mb-4 flex items-center gap-2">
                 <i data-lucide="eye" class="w-5 h-5 text-primary"></i>
-                Display
+                Visualización
             </h2>
             <div class="space-y-3">
                 <label class="flex items-center gap-3 cursor-pointer group">
                     <input type="checkbox" id="settingShowPlayers" class="checkbox checkbox-primary">
                     <i data-lucide="users" class="w-4 h-4 text-base-content/50 group-hover:text-primary transition-colors"></i>
-                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Show Players on Radar</span>
-                    <div class="tooltip" data-tip="Master toggle to show players on the radar.">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Mostrar jugadores en el radar</span>
+                    <div class="tooltip" data-tip="Interruptor principal para mostrar jugadores en el radar.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
                 <label class="flex items-center gap-3 cursor-pointer group">
                     <input type="checkbox" id="settingItems" class="checkbox checkbox-primary">
                     <i data-lucide="backpack" class="w-4 h-4 text-base-content/50 group-hover:text-primary transition-colors"></i>
-                    <span class="text-base-content/80 group-hover:text-base-content transition-colors">Show Equipment</span>
-                    <div class="tooltip" data-tip="Shows the equipment the other player is carrying.">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors">Mostrar equipamiento</span>
+                    <div class="tooltip" data-tip="Muestra el equipamiento que lleva el otro jugador.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
                 <label class="flex items-center gap-3 cursor-pointer group">
                     <input type="checkbox" id="settingShowSpells" class="checkbox checkbox-primary">
                     <i data-lucide="wand-2" class="w-4 h-4 text-base-content/50 group-hover:text-primary transition-colors"></i>
-                    <span class="text-base-content/80 group-hover:text-base-content transition-colors">Show Spells</span>
-                    <div class="tooltip" data-tip="Shows active and passive spells on player cards.">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors">Mostrar habilidades</span>
+                    <div class="tooltip" data-tip="Muestra habilidades activas y pasivas en las tarjetas de jugador.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
                 <label class="flex items-center gap-3 cursor-pointer group">
                     <input type="checkbox" id="settingShowPlayerHealthBar" class="checkbox checkbox-primary">
                     <i data-lucide="heart-pulse" class="w-4 h-4 text-base-content/50 group-hover:text-primary transition-colors"></i>
-                    <span class="text-base-content/80 group-hover:text-base-content transition-colors">Show Health Bar</span>
-                    <div class="tooltip" data-tip="Shows health bar on player cards when health data is available.">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors">Mostrar barra de salud</span>
+                    <div class="tooltip" data-tip="Muestra la barra de salud en las tarjetas cuando hay datos de salud disponibles.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
@@ -69,27 +69,27 @@
         <div class="card-body">
             <h2 class="text-xl font-semibold text-base-content mb-4 flex items-center gap-2">
                 <i data-lucide="bell" class="w-5 h-5 text-warning"></i>
-                Alerts
+                Alertas
             </h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="space-y-3">
                     <h3 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-error/80">
                         <i data-lucide="monitor" class="w-4 h-4"></i>
-                        Screen
+                        Pantalla
                     </h3>
                     <label class="flex items-center gap-3 p-3 rounded-lg bg-error/10 border border-error/20 cursor-pointer group hover:bg-error/20 transition-colors">
                         <input type="checkbox" id="settingFlash" class="checkbox checkbox-error">
                         <i data-lucide="zap" class="w-5 h-5 text-error"></i>
-                        <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Screen Flash</span>
-                        <div class="tooltip" data-tip="Shows a red flash when a player is detected.">
+                        <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Destello de pantalla</span>
+                        <div class="tooltip" data-tip="Muestra un destello rojo cuando se detecta un jugador.">
                             <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                         </div>
                     </label>
                     <label class="flex items-center gap-3 p-3 rounded-lg bg-error/10 border border-error/20 cursor-pointer group hover:bg-error/20 transition-colors">
                         <input type="checkbox" id="settingFlashDangerousPlayer" class="checkbox checkbox-error">
                         <i data-lucide="square-dashed" class="w-5 h-5 text-error"></i>
-                        <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Pulsating Border While Hostile Nearby</span>
-                        <div class="tooltip" data-tip="Draws a red pulsating border around the radar while hostile players are detected.">
+                        <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Borde pulsante con hostiles cerca</span>
+                        <div class="tooltip" data-tip="Dibuja un borde rojo pulsante alrededor del radar mientras se detectan jugadores hostiles.">
                             <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                         </div>
                     </label>
@@ -97,28 +97,28 @@
                 <div class="space-y-3">
                     <h3 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-warning/80">
                         <i data-lucide="volume-2" class="w-4 h-4"></i>
-                        Sound
+                        Sonido
                     </h3>
                     <label class="flex items-center gap-3 p-3 rounded-lg bg-warning/10 border border-warning/20 cursor-pointer group hover:bg-warning/20 transition-colors">
                         <input type="checkbox" id="settingSound" class="checkbox checkbox-warning">
                         <i data-lucide="volume-2" class="w-5 h-5 text-warning"></i>
-                        <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Sound Alert</span>
-                        <div class="tooltip" data-tip="Plays a sound alert when a player is detected.">
+                        <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Alerta sonora</span>
+                        <div class="tooltip" data-tip="Reproduce una alerta sonora cuando se detecta un jugador.">
                             <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                         </div>
                     </label>
                     <div class="flex items-center gap-3 p-3 rounded-lg bg-warning/10 border border-warning/20">
                         <i data-lucide="list" class="w-5 h-5 text-warning"></i>
-                        <label for="settingSoundFile" class="text-base-content/80 font-medium whitespace-nowrap">Sound</label>
+                        <label for="settingSoundFile" class="text-base-content/80 font-medium whitespace-nowrap">Sonido</label>
                         <select id="settingSoundFile" class="select select-bordered select-sm ml-auto w-full max-w-56"></select>
                         <button id="previewSound" type="button" class="btn btn-ghost btn-sm btn-square"
-                                aria-label="Play the selected alert sound">
+                                aria-label="Reproducir el sonido de alerta seleccionado">
                             <i data-lucide="play" class="w-4 h-4"></i>
                         </button>
                     </div>
                     <label class="flex items-center gap-3 p-3 rounded-lg bg-warning/10 border border-warning/20" for="settingSoundVolume">
                         <i data-lucide="sliders-horizontal" class="w-5 h-5 text-warning"></i>
-                        <span class="text-base-content/80 font-medium whitespace-nowrap">Volume</span>
+                        <span class="text-base-content/80 font-medium whitespace-nowrap">Volumen</span>
                         <div class="tooltip ml-auto w-full max-w-64" id="settingSoundVolumeTip" data-tip="100%">
                             <input type="range" id="settingSoundVolume" min="0" max="1" step="0.05" value="1"
                                    class="range range-warning range-xs w-full">
@@ -126,8 +126,8 @@
                     </label>
                     <label class="flex items-center gap-3 p-3 rounded-lg bg-warning/10 border border-warning/20" for="settingSoundCooldown">
                         <i data-lucide="hourglass" class="w-5 h-5 text-warning"></i>
-                        <span class="text-base-content/80 font-medium whitespace-nowrap">Cooldown</span>
-                        <div class="tooltip" data-tip="Minimum delay between two alert sounds. At zero, every detection plays.">
+                        <span class="text-base-content/80 font-medium whitespace-nowrap">Tiempo de espera</span>
+                        <div class="tooltip" data-tip="Tiempo mínimo entre dos alertas sonoras. En cero, cada detección reproduce un sonido.">
                             <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                         </div>
                         <div class="tooltip ml-auto w-full max-w-64" id="settingSoundCooldownTip" data-tip="500 ms">
@@ -145,15 +145,15 @@
         <div class="card-body">
             <h2 class="text-xl font-semibold text-base-content mb-4 flex items-center gap-2">
                 <i data-lucide="shield" class="w-5 h-5 text-primary"></i>
-                Player Types
+                Tipos de jugador
             </h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <!-- Passive Players -->
                 <label class="flex items-center gap-3 p-3 rounded-lg cursor-pointer group hover:bg-base-300/50 transition-colors">
                     <input type="checkbox" id="settingPassivePlayers" class="checkbox checkbox-success">
                     <span class="w-3 h-3 rounded-full bg-success"></span>
-                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Passive</span>
-                    <div class="tooltip" data-tip="Show players who are not flagged for PvP.">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Pasivos</span>
+                    <div class="tooltip" data-tip="Muestra jugadores que no están marcados para PvP.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
@@ -161,8 +161,8 @@
                 <label class="flex items-center gap-3 p-3 rounded-lg cursor-pointer group hover:bg-base-300/50 transition-colors">
                     <input type="checkbox" id="settingFactionPlayers" class="checkbox checkbox-info">
                     <span class="w-3 h-3 rounded-full bg-info"></span>
-                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Faction</span>
-                    <div class="tooltip" data-tip="Show players flagged for faction warfare.">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Facción</span>
+                    <div class="tooltip" data-tip="Muestra jugadores marcados para guerra de facciones.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
@@ -170,8 +170,8 @@
                 <label class="flex items-center gap-3 p-3 rounded-lg cursor-pointer group hover:bg-base-300/50 transition-colors">
                     <input type="checkbox" id="settingDangerousPlayers" class="checkbox checkbox-error">
                     <span class="w-3 h-3 rounded-full bg-error"></span>
-                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Hostile</span>
-                    <div class="tooltip" data-tip="Show hostile/dangerous players.">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Hostiles</span>
+                    <div class="tooltip" data-tip="Muestra jugadores hostiles/peligrosos.">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
                 </label>
@@ -184,14 +184,14 @@
         <div class="card-body">
             <h2 class="text-xl font-semibold text-base-content mb-4 flex items-center gap-2">
                 <i data-lucide="sliders-horizontal" class="w-5 h-5 text-primary"></i>
-                Limits
+                Límites
             </h2>
             <div class="max-w-xs">
                 <label class="block">
                     <span class="flex items-center gap-2 text-base-content/80 mb-2">
                         <i data-lucide="list" class="w-4 h-4 text-base-content/50"></i>
-                        Maximum Players Displayed
-                        <div class="tooltip" data-tip="Maximum number of players to display (1-100). Default: 50">
+                        Máximo de jugadores mostrados
+                        <div class="tooltip" data-tip="Número máximo de jugadores que se mostrarán (1-100). Predeterminado: 50">
                             <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                         </div>
                     </span>
@@ -207,7 +207,7 @@
 {{define "scripts/players"}}
 <script>
     (async function () {
-        const {registerPage, reinitCurrentPage} = await import('/scripts/core/PageController.js');
+        const {registerPage} = await import('/scripts/core/PageController.js');
         const {ALERT_SOUNDS} = await import('/scripts/utils/AlertSoundCatalog.js');
         const alertSound = (await import('/scripts/utils/AlertSound.js')).default;
 
@@ -271,7 +271,7 @@
             bindSlider("settingSoundCooldown",
                 () => settingsSync.getNumber("settingSoundCooldown", 500),
                 ms => settingsSync.setNumber("settingSoundCooldown", ms),
-                ms => ms === 0 ? "every detection" : ms + " ms");
+                ms => ms === 0 ? "cada detección" : ms + " ms");
 
             const settingMaxPlayersDisplay = document.getElementById("settingMaxPlayersDisplay");
             if (settingMaxPlayersDisplay) {
@@ -294,8 +294,6 @@
             registerPage('players', {init: initPlayersPage, destroy: destroyPlayersPage});
             window._playersPageRegistered = true;
         }
-
-        window.onGlobalsReady(() => reinitCurrentPage());
     })();
 </script>
 {{end}}
