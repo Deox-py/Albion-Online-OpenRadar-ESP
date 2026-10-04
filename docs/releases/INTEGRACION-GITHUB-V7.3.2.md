@@ -10,6 +10,7 @@ Se integraron las fuentes seleccionadas del radar V7.3.2, sus pruebas y herramie
 - Las notas antiguas de la raíz se agruparon en `docs/history`. Los logs, respaldos, dependencias, capturas privadas y binarios generados quedan fuera de Git y del contexto Docker.
 - Los 22 PCAP de regresión tienen los mismos SHA-256 que los fixtures ya publicados en la base del fork; no se añadieron capturas de una sesión personal.
 - El builder respeta primero las herramientas seleccionadas por el llamador. Esto evita que Go o Node antiguos del sistema oculten las versiones preparadas por GitHub Actions. Una prueba reproduce el fallo anterior y verifica la resolución del ejecutable elegido.
+- Se corrigió la preparación de MinGW desde cero: la salida de progreso de MSYS2/pacman contaminaba el valor que debía contener sólo la ruta de GCC. La ejecución nativa verifica su código de salida y escribe el progreso en consola. Una regresión con un proceso real reproduce el fallo y pasa después de la corrección.
 - La prueba de zoom heredada del fork comprueba los límites del HTML contra el normalizador real, después de extraer el controlador del template.
 - Se resolvieron avisos del linter de Go con cambios equivalentes y retirando un método sin llamadas. Las excepciones de análisis de seguridad son locales y explican sus rutas o llamadas; no se deshabilitaron reglas globalmente. Se conservó el texto español de la interfaz.
 - CI añade typecheck, detector de carreras, replay offline y compilación/verificación portable Windows. Los workflows se validaron con actionlint 1.7.12.
@@ -24,7 +25,7 @@ Se integraron las fuentes seleccionadas del radar V7.3.2, sus pruebas y herramie
 | Go | `go test -race -count=1` en raíz, `cmd`, `internal` y `tools`, aprobado |
 | golangci-lint 2.13.2 | Aprobado, 0 diagnósticos; avisos heredados de exclusiones sin coincidencias |
 | QA estático y funcional | 12 y 7 grupos aprobados |
-| Packaging Windows | 14 pruebas aprobadas, incluidos recursos reales y prioridad del toolchain |
+| Packaging Windows | 15 pruebas aprobadas, incluidos recursos reales, prioridad del toolchain y preparación limpia de MinGW |
 | Navegador offline | PCAP → Photon → WebSocket → UI, cofres sintéticos identificados, filtros, mapa, zoom, reset y navegación aprobados |
 | Compilación Windows | Launcher portable y núcleo compilados; integridad, metadatos y núcleo embebido verificados |
 

@@ -42,6 +42,40 @@ try {
             Assert ((Get-Command go.exe).Source -eq $selectedGo) 'An older system Go shadows the selected toolchain.'
         } finally { $env:Path = $savedPath }
     }
+    Test 'Fresh portable MinGW returns only its compiler path despite native progress output' {
+        $projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+        $parseTokens = $null
+        $parseErrors = $null
+        $builderAst = [Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $projectRoot 'AUTO-BUILD-2.3ESP_Deox.ps1'), [ref]$parseTokens, [ref]$parseErrors)
+        $ensure = $builderAst.Find({ param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Ensure-Mingw'
+        }, $true)
+        $MsysCacheRoot = Join-Path $testRoot 'fresh-msys64'
+        $NoInstall = $false
+        $nativeBin = Join-Path $MsysCacheRoot 'usr/bin'
+        $compilerBin = Join-Path $MsysCacheRoot 'mingw64/bin'
+        New-Item -ItemType Directory -Path $nativeBin, $compilerBin | Out-Null
+        $fakeBash = Join-Path $nativeBin 'bash.exe'
+        Add-Type -TypeDefinition 'public class NativePackageProgress { public static void Main() { System.Console.WriteLine("package progress"); System.Console.WriteLine(); } }' -OutputAssembly $fakeBash -OutputType ConsoleApplication
+        $expectedCompiler = Join-Path $compilerBin 'gcc.exe'
+        [IO.File]::WriteAllBytes($expectedCompiler, [byte[]]@())
+        function Refresh-Path {}
+        function Add-MingwPath([string]$MsysRoot) {}
+        function Banner([string]$Text) { Write-Host $Text }
+        function Test-Path([string]$Path) {
+            if ($Path -eq 'C:\msys64\mingw64\bin\gcc.exe') { return $false }
+            Microsoft.PowerShell.Management\Test-Path -LiteralPath $Path
+        }
+        $script:portableProbeCount = 0
+        function Test-MingwCompiler([string]$MsysRoot, [string]$GccPath) {
+            $script:portableProbeCount++
+            return $script:portableProbeCount -gt 1
+        }
+        $result = @(& $ensure.Body.GetScriptBlock())
+        Assert ($result.Count -eq 1) 'Native progress polluted the compiler path returned to the builder.'
+        Assert ($result[0] -eq $expectedCompiler) 'Fresh setup returned the wrong compiler.'
+    }
     Test 'Trial output resolves beneath dist and rejects paths outside it' {
         $projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
         $default = Resolve-ReleaseOutputDirectory -Root $projectRoot

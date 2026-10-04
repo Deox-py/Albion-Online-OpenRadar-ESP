@@ -362,10 +362,7 @@ function Ensure-Mingw {
 
         Write-Host "Extrayendo MSYS2 en cache compartido: $SharedCacheRoot ..." -ForegroundColor Yellow
         Remove-BuildPath -Path $MsysCacheRoot -AllowedRoot $SharedCacheRoot
-        & $sfx '-y' "-o$SharedCacheRoot"
-        if ($LASTEXITCODE -ne 0) {
-            throw "No se pudo extraer MSYS2 portable (codigo $LASTEXITCODE)."
-        }
+        Invoke-CheckedNative -FilePath $sfx -Arguments @('-y', "-o$SharedCacheRoot") -Step 'Extraccion MSYS2 portable' | Out-Host
 
         if (-not (Test-Path $localBash)) {
             throw "MSYS2 se extrajo, pero no aparece $localBash"
@@ -375,25 +372,18 @@ function Ensure-Mingw {
 
     Banner 'Instalando/reparando GCC MinGW-w64 dentro de MSYS2 local'
     Write-Host 'Actualizando indices de paquetes...' -ForegroundColor Yellow
-    & $localBash -lc 'pacman -Sy --noconfirm'
-    if ($LASTEXITCODE -ne 0) {
-        throw "pacman -Sy fallo con codigo $LASTEXITCODE."
-    }
+    # Keep native progress on the host stream. Ensure-Mingw's success stream
+    # must contain only the compiler path consumed by the caller.
+    Invoke-CheckedNative -FilePath $localBash -Arguments @('-lc', 'pacman -Sy --noconfirm') -Step 'pacman -Sy' | Out-Host
 
     Write-Host 'Instalando/verificando GCC, binutils y runtime MinGW-w64...' -ForegroundColor Yellow
-    & $localBash -lc 'pacman -S --needed --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-binutils mingw-w64-x86_64-gcc-libs'
-    if ($LASTEXITCODE -ne 0) {
-        throw "pacman no pudo preparar el toolchain MinGW-w64 (codigo $LASTEXITCODE)."
-    }
+    Invoke-CheckedNative -FilePath $localBash -Arguments @('-lc', 'pacman -S --needed --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-binutils mingw-w64-x86_64-gcc-libs') -Step 'Instalacion MinGW-w64' | Out-Host
 
     Add-MingwPath $localMsysRoot
     if (-not (Test-MingwCompiler $localMsysRoot $localGcc)) {
         # One repair attempt for an interrupted/inconsistent package transaction.
         Write-Host 'GCC sigue sin pasar la prueba; forzando reinstalacion de paquetes del toolchain...' -ForegroundColor DarkYellow
-        & $localBash -lc 'pacman -S --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-binutils mingw-w64-x86_64-gcc-libs'
-        if ($LASTEXITCODE -ne 0) {
-            throw "La reparacion de MinGW-w64 fallo con codigo $LASTEXITCODE."
-        }
+        Invoke-CheckedNative -FilePath $localBash -Arguments @('-lc', 'pacman -S --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-binutils mingw-w64-x86_64-gcc-libs') -Step 'Reparacion MinGW-w64' | Out-Host
         Add-MingwPath $localMsysRoot
     }
 
