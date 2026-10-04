@@ -28,13 +28,16 @@ export class MapDrawing extends DrawingUtils
         const size = extent * scaleFactor;
         const adjX = (curr_map.hX - center.x) * scaleFactor;
         const adjY = (curr_map.hY + center.y) * scaleFactor;
-        this.DrawImageMap(ctx, adjX, adjY, id, size, size);
+        // Numeric sub-zones (e.g. 1234-5) reuse the base map asset. Named
+        // instances keep their exact ID so we never draw unrelated terrain.
+        const assetId = /^\d+-\d+$/.test(id) ? id.split('-')[0] : id;
+        this.DrawImageMap(ctx, adjX, adjY, assetId, size, size);
     }
     DrawImageMap(ctx, x, y, imageName, drawWidth, drawHeight)
     {
         // Fill background => if no map image or corner to prevent glitch textures
         ctx.fillStyle = '#1a1c23';
-        ctx.fillRect(0, 0, ctx.width, ctx.height);
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         if (!settingsSync.getBool("settingShowMap", true)) return;
 

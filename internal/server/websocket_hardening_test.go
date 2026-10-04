@@ -62,7 +62,7 @@ func TestSecurityHeaders(t *testing.T) {
 
 func TestWebSocketQueueIsHardBounded(t *testing.T) {
 	ws := &WebSocketHandler{
-		clients:     make(map[*websocket.Conn]bool),
+		clients:     make(map[*websocket.Conn]*wsClient),
 		batchBuffer: make([]any, 0, MaxBatchSize),
 		stopBatch:   make(chan struct{}),
 		flushNow:    make(chan struct{}, 1),

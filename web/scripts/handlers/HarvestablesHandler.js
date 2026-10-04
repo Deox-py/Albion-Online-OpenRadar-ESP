@@ -76,13 +76,26 @@ export class HarvestablesHandler
         }
     }
 
+    _isLivingMobileTypeId(mobileTypeId)
+    {
+        const parsed = Number(mobileTypeId);
+        if (!Number.isInteger(parsed) || parsed < 0 || parsed === 65535) return false;
+
+        // Once the mob DB is ready, require an actual resource entry. This avoids
+        // classifying unknown positive sentinels/IDs as living resources.
+        if (window.mobsDatabase?.isLoaded && typeof window.mobsDatabase.getResourceInfo === 'function') {
+            return !!window.mobsDatabase.getResourceInfo(parsed);
+        }
+        return true;
+    }
+
     addHarvestable(id, type, tier, posX, posY, charges, size, mobileTypeId = null)
     {
         // Determine resource type: living (animals/creatures) vs static.
         // - mobileTypeId === 65535 or -1 : STATIC (both are int16 decodes of 0xFFFF).
-        // - mobileTypeId === null        : STATIC from Event 38 batch spawn.
+        // - mobileTypeId === null        : STATIC from Event 39 batch spawn.
         // - mobileTypeId === real TypeID : LIVING creature.
-        const isLiving = mobileTypeId !== null && mobileTypeId !== 65535 && mobileTypeId !== -1;
+        const isLiving = this._isLivingMobileTypeId(mobileTypeId);
 
         // Get resource type string
         // Living resources: use MobsDatabase (typeNumber is WRONG for living!)
@@ -134,18 +147,25 @@ export class HarvestablesHandler
         }
         else // update
         {
-            harvestable.setCharges(charges);
+            harvestable.type = type;
+            harvestable.tier = tier;
+            if (Number.isFinite(Number(posX))) harvestable.posX = Number(posX);
+            if (Number.isFinite(Number(posY))) harvestable.posY = Number(posY);
+            harvestable.charges = charges;
+            harvestable.size = size;
+            harvestable.mobileTypeId = mobileTypeId;
+            harvestable.touch();
             if (stringType) harvestable.stringType = stringType;
 
             window.logger?.debug(CATEGORIES.HARVESTABLES, 'HarvestableUpdated', {
-                id, stringType, newCharges: charges
+                id, stringType, newCharges: charges, size, tier, mobileTypeId
             });
         }
     }
 
     UpdateHarvestable(id, type, tier, posX, posY, charges, size, mobileTypeId = null)
     {
-        const isLiving = mobileTypeId !== null && mobileTypeId !== 65535 && mobileTypeId !== -1;
+        const isLiving = this._isLivingMobileTypeId(mobileTypeId);
 
         // Get resource type string
         // Living resources: use MobsDatabase (typeNumber is WRONG for living!)
@@ -200,8 +220,14 @@ export class HarvestablesHandler
             stringType: harvestable.stringType
         });
 
+        harvestable.type = type;
+        harvestable.tier = tier;
+        if (Number.isFinite(Number(posX))) harvestable.posX = Number(posX);
+        if (Number.isFinite(Number(posY))) harvestable.posY = Number(posY);
         harvestable.charges = charges;
         harvestable.size = size;
+        harvestable.mobileTypeId = mobileTypeId;
+        harvestable.touch();
         if (stringType) harvestable.stringType = stringType;
     }
 
@@ -268,12 +294,21 @@ export class HarvestablesHandler
         const type = Parameters[5];  // typeNumber (0-27)
         const mobileTypeId = Parameters[6];  // Mobile TypeID (421, 422, 527, etc.)
         const tier = Parameters[7];
-        const location = Parameters[8];
+        const rawLocation = Parameters[8];
+        const location = rawLocation?.data ?? rawLocation;
 
         let enchant = Parameters[11] === undefined ? 0 : Parameters[11];
         let size = Parameters[10] === undefined ? 0 : Parameters[10];
 
-        // 🔍 Log ALL parameters for comparison with Event38
+        if (!Array.isArray(location) || location.length < 2
+            || !Number.isFinite(Number(location[0])) || !Number.isFinite(Number(location[1]))) {
+            window.logger?.warn(CATEGORIES.HARVESTABLES, 'DetectionV7_Event40InvalidLocation', {
+                id, rawLocation
+            });
+            return;
+        }
+
+        // 🔍 Log ALL parameters for comparison with Event39
         const allParams40 = {};
         for (let key in Parameters) {
             if (Parameters.hasOwnProperty(key)) {
@@ -288,15 +323,12 @@ export class HarvestablesHandler
             enchant,
             size,
             mobileTypeId,
-            isLiving: mobileTypeId !== null && mobileTypeId !== 65535 && mobileTypeId !== -1,
+            isLiving: this._isLivingMobileTypeId(mobileTypeId),
             allParametersKeys: Object.keys(Parameters),
             allParameters: allParams40
         });
 
-        const isCritterCorpse = mobileTypeId !== null
-            && mobileTypeId !== 65535
-            && mobileTypeId !== -1
-            && mobileTypeId !== undefined;
+        const isCritterCorpse = this._isLivingMobileTypeId(mobileTypeId);
         if (isCritterCorpse) {
             const dbInfo = window.mobsDatabase?.getMobInfo(mobileTypeId);
             window.logger?.info(CATEGORIES.HARVESTABLES, 'CritterCorpseTierAudit', {
@@ -315,11 +347,11 @@ export class HarvestablesHandler
 
     // Normally work with everything
     // Good
-    newSimpleHarvestableObject(Parameters) // New (Event 38 - Batch spawn)
+    newSimpleHarvestableObject(Parameters) // New (Event 39 - Batch spawn)
     {
         // Validate required parameters exist
         if (!Parameters[0] || !Parameters[1] || !Parameters[2] || !Parameters[3] || !Parameters[4]) {
-            window.logger?.warn(CATEGORIES.HARVESTABLES, 'Event38_MissingParams', {
+            window.logger?.warn(CATEGORIES.HARVESTABLES, 'Event39_MissingParams', {
                 has0: !!Parameters[0],
                 has1: !!Parameters[1],
                 has2: !!Parameters[2],
@@ -335,20 +367,24 @@ export class HarvestablesHandler
         const a1 = Parameters[1]["data"] ?? Parameters[1];
         const a2 = Parameters[2]["data"] ?? Parameters[2];
 
-        const a3 = Parameters[3];
+        const a3 = Parameters[3]?.data ?? Parameters[3];
         const a4 = Parameters[4]["data"] ?? Parameters[4];
 
-        // Validate arrays
-        if (!Array.isArray(a1) || !Array.isArray(a2) || !Array.isArray(a4)) {
-            window.logger?.warn(CATEGORIES.HARVESTABLES, 'Event38_InvalidArrays', {
-                a1IsArray: Array.isArray(a1),
-                a2IsArray: Array.isArray(a2),
-                a4IsArray: Array.isArray(a4)
+        // All parallel arrays must be usable. Positions contain two values per resource.
+        if (!Array.isArray(a1) || !Array.isArray(a2) || !Array.isArray(a3) || !Array.isArray(a4)
+            || a1.length < a0.length || a2.length < a0.length
+            || a4.length < a0.length || a3.length < a0.length * 2) {
+            window.logger?.warn(CATEGORIES.HARVESTABLES, 'DetectionV7_Event39InvalidArrays', {
+                ids: a0.length,
+                types: Array.isArray(a1) ? a1.length : null,
+                tiers: Array.isArray(a2) ? a2.length : null,
+                positions: Array.isArray(a3) ? a3.length : null,
+                counts: Array.isArray(a4) ? a4.length : null
             });
             return;
         }
 
-        window.logger?.info(CATEGORIES.HARVESTABLES, 'Event38_BatchSpawn', {
+        window.logger?.info(CATEGORIES.HARVESTABLES, 'Event39_BatchSpawn', {
             count: a0.length,
             note: 'Resources created with enchant=0 (temporary), Event 46 will update enchantments'
         });
@@ -361,7 +397,14 @@ export class HarvestablesHandler
             const posY = a3[i * 2 + 1];
             const count = a4[i];
 
-            // 🔍 Event 38 does NOT send enchantment
+            if (!Number.isFinite(Number(posX)) || !Number.isFinite(Number(posY))) {
+                window.logger?.warn(CATEGORIES.HARVESTABLES, 'DetectionV7_Event39InvalidPosition', {
+                    id, index: i, posX, posY
+                });
+                continue;
+            }
+
+            // 🔍 Event 39 does NOT send enchantment
             // Resources created with enchant=0, Event 46 (HarvestUpdateEvent) will update it
             const enchant = 0;
 
@@ -369,11 +412,20 @@ export class HarvestablesHandler
         }
     }
 
-    removeNotInRange(lpX, lpY)
+    removeNotInRange(lpX, lpY, maxDistance = 120)
     {
-        this.harvestableList = this.harvestableList.filter(
-            (x) => this.calculateDistance(lpX, lpY, x.posX, x.posY) <= 80
-        );
+        const localX = Number(lpX);
+        const localY = Number(lpY);
+        const range = Math.max(80, Math.min(160, Number(maxDistance) || 120));
+
+        // Do not purge the cache when the local position has not been decoded yet.
+        // That used to remove valid resources immediately after map transitions.
+        if (Number.isFinite(localX) && Number.isFinite(localY)) {
+            this.harvestableList = this.harvestableList.filter((x) => {
+                if (!Number.isFinite(Number(x.posX)) || !Number.isFinite(Number(x.posY))) return false;
+                return this.calculateDistance(localX, localY, Number(x.posX), Number(x.posY)) <= range;
+            });
+        }
 
         this.harvestableList = this.harvestableList.filter(item => item.size !== undefined);
     }

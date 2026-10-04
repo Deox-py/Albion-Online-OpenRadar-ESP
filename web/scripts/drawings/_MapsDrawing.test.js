@@ -31,8 +31,7 @@ const zonesDatabase = (await import('../data/ZonesDatabase.js')).default;
 
 function buildCtx() {
     return {
-        width: 500,
-        height: 500,
+        canvas: {width: 500, height: 500},
         fillStyle: '',
         fillRect: vi.fn(),
         save: vi.fn(),
@@ -59,6 +58,13 @@ describe('MapsDrawing per-zone asset extent', () => {
         drawing.getZoomLevel = vi.fn(() => 1.0);
         drawing.getCanvasCenter = vi.fn(() => 250);
         ctx = buildCtx();
+    });
+
+    test('background uses real canvas dimensions when an image is unavailable', () => {
+        ctx.canvas = {width: 650, height: 650};
+        drawing.DrawImageMap(ctx, 0, 0, undefined, 100, 100);
+        expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 650, 650);
+        expect(ctx.drawImage).not.toHaveBeenCalled();
     });
 
     // @verified 2026-05-13: synthetic. Default 825 extent matches the legacy baseline confirmed
@@ -155,6 +161,16 @@ describe('MapsDrawing per-zone asset extent', () => {
         const tr = lastTranslate(ctx);
         expect(tr[0]).toBeCloseTo(-40, 6);
         expect(tr[1]).toBeCloseTo(-640, 6);
+    });
+
+    // @verified 2026-09-30: compound numeric sub-zones load the base map image asset.
+    test('numeric sub-zone uses base asset id', () => {
+        const imageSpy = vi.spyOn(drawing, 'DrawImageMap');
+        const map = {id: '1234-5', hX: 0, hY: 0};
+
+        drawing.draw(ctx, map);
+
+        expect(imageSpy).toHaveBeenCalledWith(ctx, expect.any(Number), expect.any(Number), '1234', expect.any(Number), expect.any(Number));
     });
 
     // @verified 2026-05-13: synthetic. Negative id is the "no map" sentinel from MapH(-1) at boot.

@@ -1,7 +1,9 @@
 package photon
 
 import (
+	"bytes"
 	"encoding/binary"
+	"sync"
 	"time"
 )
 
@@ -9,9 +11,10 @@ const (
 	photonHeaderLength   = 12
 	commandHeaderLength  = 12
 	fragmentHeaderLength = 20
-
-	// Caps reassembly memory at ~64 × 1 MB per parser under packet loss.
+	// Bound memory globally across every interface and connection.
 	maxPendingSegments = 64
+	maxFragmentCount   = 4096
+	fragmentTTL        = 30 * time.Second
 )
 
 const (
@@ -29,19 +32,30 @@ const (
 	msgEncrypted   = byte(131)
 )
 
+type segmentKey struct {
+	flow      string
+	peer      uint16
+	challenge uint32
+	channel   byte
+	sequence  uint32
+}
+
+type fragmentRange struct{ offset, length int }
+
 type segmentedPackage struct {
-	totalLength  int
-	bytesWritten int
-	payload      []byte
-	createdAt    time.Time
-	// seenOffsets deduplicates repeated fragments under UDP loss/retransmit.
-	// Without it, a duplicate fragment would bump bytesWritten twice and
-	// trigger premature completion with a partially zeroed payload.
-	seenOffsets map[int]struct{}
+	totalLength   int
+	fragmentCount int
+	bytesWritten  int
+	payload       []byte
+	createdAt     time.Time
+	fragments     map[int]fragmentRange
 }
 
 type PhotonParser struct {
-	pendingSegments map[uint32]*segmentedPackage
+	// The callbacks form the same serial stream as the reassembly state.
+	// Register callbacks before capture starts; callbacks must not reenter this parser.
+	mu              sync.Mutex
+	pendingSegments map[segmentKey]*segmentedPackage
 
 	OnEvent      func(*EventData)
 	OnRequest    func(*OperationRequest)
@@ -50,193 +64,200 @@ type PhotonParser struct {
 	OnParseError func(reason string, payloadLen int)
 }
 
-func NewPhotonParser(
-	onEvent func(*EventData),
-	onRequest func(*OperationRequest),
-	onResponse func(*OperationResponse),
-) *PhotonParser {
-	return &PhotonParser{
-		pendingSegments: make(map[uint32]*segmentedPackage),
-		OnEvent:         onEvent,
-		OnRequest:       onRequest,
-		OnResponse:      onResponse,
-	}
+func NewPhotonParser(onEvent func(*EventData), onRequest func(*OperationRequest), onResponse func(*OperationResponse)) *PhotonParser {
+	return &PhotonParser{pendingSegments: make(map[segmentKey]*segmentedPackage), OnEvent: onEvent, OnRequest: onRequest, OnResponse: onResponse}
 }
 
-func (p *PhotonParser) ReceivePacket(payload []byte) bool {
+// ResetFragments retires incomplete messages at an actual capture source change.
+// Callers must stop previous delivery before resuming a replacement source.
+func (p *PhotonParser) ResetFragments() {
+	p.mu.Lock()
+	clear(p.pendingSegments)
+	p.mu.Unlock()
+}
+
+// ReceivePacket retains the payload-only API for offline fixtures and single-flow callers.
+// Concurrent network captures should supply a directional transport identity with ReceivePacketFlow.
+func (p *PhotonParser) ReceivePacket(payload []byte) bool { return p.ReceivePacketFlow("", payload) }
+
+// ReceivePacketFlow parses a packet in its interface/source/destination namespace.
+// Peer, challenge and channel from the Photon headers further isolate sessions.
+func (p *PhotonParser) ReceivePacketFlow(flow string, payload []byte) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.expireSegments(time.Now())
 	if len(payload) < photonHeaderLength {
-		if p.OnParseError != nil {
-			p.OnParseError("payload shorter than photon header", len(payload))
-		}
+		p.reportError("payload shorter than photon header", len(payload))
 		return false
 	}
-	offset := 2 // skip peerId
-	flags := payload[offset]
-	offset++
-	commandCount := int(payload[offset])
-	offset++
-	offset += 8 // skip timestamp + challenge
-
-	if flags == 1 {
+	if payload[2] == 1 {
 		if p.OnEncrypted != nil {
 			p.OnEncrypted()
 		}
 		return false
 	}
-
-	for range commandCount {
-		var ok bool
-		offset, ok = p.handleCommand(payload, offset)
-		if !ok {
-			if p.OnParseError != nil {
-				p.OnParseError("handleCommand failed", len(payload))
-			}
+	key := segmentKey{flow: flow, peer: binary.BigEndian.Uint16(payload), challenge: binary.BigEndian.Uint32(payload[8:12])}
+	offset := photonHeaderLength
+	for range int(payload[3]) {
+		var reason string
+		offset, reason = p.handleCommand(payload, offset, key)
+		if reason != "" {
+			p.reportError(reason, len(payload))
 			return false
 		}
 	}
 	return true
 }
 
-func (p *PhotonParser) handleCommand(src []byte, offset int) (int, bool) {
-	if !available(src, offset, commandHeaderLength) {
-		return offset, false
-	}
-	cmdType := src[offset]
-	offset += 4 // cmdType, channelId, commandFlags, reserved
-	cmdLen := int(binary.BigEndian.Uint32(src[offset:]))
-	offset += 4
-	offset += 4 // reliableSequenceNumber
-	cmdLen -= commandHeaderLength
-	if cmdLen < 0 || !available(src, offset, cmdLen) {
-		return offset, false
-	}
-
-	switch cmdType {
-	case cmdDisconnect:
-		return offset + cmdLen, true
-	case cmdSendUnreliable:
-		if cmdLen < 4 {
-			return offset + cmdLen, false
-		}
-		offset += 4
-		cmdLen -= 4
-		return p.handleSendReliable(src, offset, cmdLen), true
-	case cmdSendReliable:
-		return p.handleSendReliable(src, offset, cmdLen), true
-	case cmdSendFragment:
-		return p.handleSendFragment(src, offset, cmdLen), true
-	default:
-		return offset + cmdLen, true
+func (p *PhotonParser) reportError(reason string, payloadLen int) {
+	if p.OnParseError != nil {
+		p.OnParseError(reason, payloadLen)
 	}
 }
 
-func (p *PhotonParser) handleSendReliable(src []byte, offset, cmdLen int) int {
-	if cmdLen < 2 || !available(src, offset, cmdLen) {
-		return offset + cmdLen
+func (p *PhotonParser) handleCommand(src []byte, offset int, key segmentKey) (nextOffset int, reason string) {
+	if !available(src, offset, commandHeaderLength) {
+		return offset, "handleCommand: truncated command header"
 	}
-	offset++ // signalByte
-	msgType := src[offset]
-	offset++
-	cmdLen -= 2
-
-	if !available(src, offset, cmdLen) {
-		return offset + cmdLen
+	cmdType := src[offset]
+	key.channel = src[offset+1]
+	cmdLen := int(binary.BigEndian.Uint32(src[offset+4:])) - commandHeaderLength
+	offset += commandHeaderLength
+	if cmdLen < 0 || !available(src, offset, cmdLen) {
+		return offset, "handleCommand: invalid command length"
 	}
+	end := offset + cmdLen
+	switch cmdType {
+	case cmdDisconnect:
+		for pending := range p.pendingSegments {
+			if pending.flow == key.flow && pending.peer == key.peer && pending.challenge == key.challenge {
+				delete(p.pendingSegments, pending)
+			}
+		}
+	case cmdSendUnreliable:
+		if cmdLen < 4 {
+			return end, "handleCommand: truncated unreliable header"
+		}
+		return end, p.handleSendReliable(src[offset+4 : end])
+	case cmdSendReliable:
+		return end, p.handleSendReliable(src[offset:end])
+	case cmdSendFragment:
+		return end, p.handleSendFragment(src[offset:end], key)
+	}
+	return end, ""
+}
 
-	if msgType == msgEncrypted {
+func (p *PhotonParser) handleSendReliable(data []byte) string {
+	if len(data) < 2 {
+		return "reliable message header truncated"
+	}
+	msgType := data[1]
+	data = data[2:]
+	if msgType&0x80 != 0 {
 		if p.OnEncrypted != nil {
 			p.OnEncrypted()
 		}
-		return offset + cmdLen
+		return ""
 	}
-
-	data := src[offset : offset+cmdLen]
-	offset += cmdLen
-
 	switch msgType {
 	case msgRequest:
-		if req, err := DeserializeRequest(data); err == nil && p.OnRequest != nil {
+		req, err := DeserializeRequest(data)
+		if err != nil {
+			return "deserialize request failed: " + err.Error()
+		}
+		if p.OnRequest != nil {
 			p.OnRequest(req)
 		}
 	case msgResponse, msgResponseAlt:
-		if resp, err := DeserializeResponse(data); err == nil && p.OnResponse != nil {
+		resp, err := DeserializeResponse(data)
+		if err != nil {
+			return "deserialize response failed: " + err.Error()
+		}
+		if p.OnResponse != nil {
 			p.OnResponse(resp)
 		}
 	case msgEvent:
-		if ev, err := DeserializeEvent(data); err == nil && p.OnEvent != nil {
+		ev, err := DeserializeEvent(data)
+		if err != nil {
+			return "deserialize event failed: " + err.Error()
+		}
+		if p.OnEvent != nil {
 			p.OnEvent(ev)
 		}
 	}
-	return offset
+	return ""
 }
 
-func (p *PhotonParser) handleSendFragment(src []byte, offset, cmdLen int) int {
-	if cmdLen < fragmentHeaderLength || !available(src, offset, fragmentHeaderLength) {
-		return offset + cmdLen
+func (p *PhotonParser) handleSendFragment(data []byte, key segmentKey) string {
+	if len(data) < fragmentHeaderLength {
+		return "fragment header truncated"
 	}
-
-	startSeq := binary.BigEndian.Uint32(src[offset:])
-	offset += 4
-	cmdLen -= 4
-	offset += 4 // fragmentCount
-	cmdLen -= 4
-	offset += 4 // fragmentNumber
-	cmdLen -= 4
-	totalLen := int(binary.BigEndian.Uint32(src[offset:]))
-	offset += 4
-	cmdLen -= 4
-	fragOffset := int(binary.BigEndian.Uint32(src[offset:]))
-	offset += 4
-	cmdLen -= 4
-
-	fragLen := cmdLen
-	if fragLen < 0 || !available(src, offset, fragLen) ||
-		totalLen < 0 || totalLen > maxArraySize*16 {
-		return offset + fragLen
+	key.sequence = binary.BigEndian.Uint32(data)
+	count := int(binary.BigEndian.Uint32(data[4:]))
+	number := int(binary.BigEndian.Uint32(data[8:]))
+	total := int(binary.BigEndian.Uint32(data[12:]))
+	offset := int(binary.BigEndian.Uint32(data[16:]))
+	chunk := data[fragmentHeaderLength:]
+	reject := func(reason string) string { delete(p.pendingSegments, key); return reason }
+	if total < 2 || total > maxArraySize*16 || count < 1 || count > maxFragmentCount || count > total || number < 0 || number >= count || len(chunk) == 0 || offset > total || len(chunk) > total-offset {
+		return reject("fragment bounds or count invalid")
 	}
-
-	seg, ok := p.pendingSegments[startSeq]
-	if !ok {
+	seg := p.pendingSegments[key]
+	if seg == nil {
 		p.evictIfFull()
-		seg = &segmentedPackage{
-			totalLength: totalLen,
-			payload:     make([]byte, totalLen),
-			createdAt:   time.Now(),
-			seenOffsets: make(map[int]struct{}),
+		seg = &segmentedPackage{totalLength: total, fragmentCount: count, payload: make([]byte, total), createdAt: time.Now(), fragments: make(map[int]fragmentRange)}
+		p.pendingSegments[key] = seg
+	} else if seg.totalLength != total || seg.fragmentCount != count {
+		return reject("fragment metadata mismatch")
+	}
+	end := offset + len(chunk)
+	if prior, duplicate := seg.fragments[number]; duplicate {
+		if prior.offset == offset && prior.length == len(chunk) && bytes.Equal(seg.payload[offset:end], chunk) {
+			return ""
 		}
-		p.pendingSegments[startSeq] = seg
+		return reject("fragment duplicate mismatch")
 	}
+	for _, prior := range seg.fragments {
+		if offset < prior.offset+prior.length && prior.offset < end {
+			return reject("fragment overlap")
+		}
+	}
+	copy(seg.payload[offset:end], chunk)
+	seg.fragments[number] = fragmentRange{offset: offset, length: len(chunk)}
+	seg.bytesWritten += len(chunk)
+	if len(seg.fragments) == count {
+		if seg.bytesWritten != total {
+			return reject("fragment assembly has gaps")
+		}
+		delete(p.pendingSegments, key)
+		return p.handleSendReliable(seg.payload)
+	}
+	return ""
+}
 
-	end := fragOffset + fragLen
-	if _, dup := seg.seenOffsets[fragOffset]; !dup && fragOffset >= 0 && end <= len(seg.payload) {
-		copy(seg.payload[fragOffset:end], src[offset:offset+fragLen])
-		seg.bytesWritten += fragLen
-		seg.seenOffsets[fragOffset] = struct{}{}
+func (p *PhotonParser) expireSegments(now time.Time) {
+	for key, seg := range p.pendingSegments {
+		if now.Sub(seg.createdAt) >= fragmentTTL {
+			delete(p.pendingSegments, key)
+			p.reportError("fragment reassembly expired", seg.totalLength)
+		}
 	}
-	offset += fragLen
-
-	if seg.bytesWritten >= seg.totalLength {
-		delete(p.pendingSegments, startSeq)
-		p.handleSendReliable(seg.payload, 0, len(seg.payload))
-	}
-	return offset
 }
 
 func (p *PhotonParser) evictIfFull() {
 	if len(p.pendingSegments) < maxPendingSegments {
 		return
 	}
-	var oldestKey uint32
+	var oldestKey segmentKey
 	var oldestTime time.Time
-	first := true
-	for k, v := range p.pendingSegments {
-		if first || v.createdAt.Before(oldestTime) {
-			oldestKey = k
-			oldestTime = v.createdAt
-			first = false
+	for key, seg := range p.pendingSegments {
+		if oldestTime.IsZero() || seg.createdAt.Before(oldestTime) {
+			oldestKey, oldestTime = key, seg.createdAt
 		}
 	}
+	seg := p.pendingSegments[oldestKey]
 	delete(p.pendingSegments, oldestKey)
+	p.reportError("fragment reassembly capacity exceeded", seg.totalLength)
 }
 
 func available(src []byte, offset, count int) bool {

@@ -152,7 +152,13 @@ export class MobsHandler {
                 parameterCount: Object.keys(parameters).length
             });
 
-            const loc = parameters[7] || [0, 0];
+            const rawLoc = parameters[7];
+            const loc = rawLoc?.data ?? rawLoc;
+            if (!Array.isArray(loc) || loc.length < 2
+                || !Number.isFinite(Number(loc[0])) || !Number.isFinite(Number(loc[1]))) {
+                window.logger?.warn(CATEGORIES.MOBS, 'NewMob_InvalidLocation', {mobId, typeId, rawLoc});
+                return;
+            }
             const posX = this.normalizeNumber(loc[0], 0);
             const posY = this.normalizeNumber(loc[1], 0);
             const healthNormalized = this.normalizeNumber(parameters[2], 255);  // Current HP (0-255)
@@ -442,12 +448,23 @@ export class MobsHandler {
     }
 
     AddMist(id, posX, posY, name, enchant) {
+        if (!Number.isFinite(Number(posX)) || !Number.isFinite(Number(posY)) || !isMistPortalName(name)) {
+            window.logger?.warn(CATEGORIES.MOBS, 'MistPortal_InvalidSpawn', {id, posX, posY, name, enchant});
+            return;
+        }
+
+        const normalizedEnchant = this.calculateEnchantment(this.normalizeNumber(enchant, 0));
         const existing = this.mistList.find(m => m.id === id);
         if (existing) {
+            existing.posX = Number(posX);
+            existing.posY = Number(posY);
+            existing.name = name;
+            existing.enchant = normalizedEnchant;
+            existing.type = name.toLowerCase().includes('solo') ? 0 : 1;
             existing.touch();
             return;
         }
-        this.mistList.push(new Mist(id, posX, posY, name, enchant));
+        this.mistList.push(new Mist(id, Number(posX), Number(posY), name, normalizedEnchant));
     }
 
     removeMist(id) {

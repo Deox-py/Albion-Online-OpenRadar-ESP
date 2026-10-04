@@ -2,7 +2,9 @@
 
 Technical reference for contributors working on OpenRadar's Go backend and JavaScript frontend.
 
-*Last verified against code: 2026-08-14.*
+This guide retains the upstream architecture reference from 2026-08-14. For the
+radar-only V7.3.2 build and current verification commands, start with the
+[repository README](../../README.md) and [Windows build guide](../technical/WINDOWS_RELEASE.md).
 
 ## Architecture overview
 
@@ -47,14 +49,14 @@ OpenRadar/
 | Go | 1.27+ | go.mod pins `go 1.27` |
 | Npcap | 1.87+ | Windows packet capture |
 | libpcap | latest | Linux: `apt install libpcap-dev` |
-| Node.js | 20+ | tools and Vitest |
+| Node.js | 24+ | package.json minimum; tools and Vitest |
 | Docker | latest | Linux cross-compile |
 
 ### Quick setup
 
 ```bash
-git clone https://github.com/Nouuu/Albion-Online-OpenRadar.git
-cd Albion-Online-OpenRadar
+git clone https://github.com/Deox-py/Albion-Online-OpenRadar-ESP.git
+cd Albion-Online-OpenRadar-ESP
 
 make install-tools   # air, golangci-lint, git-cliff
 make assets          # CSS, vendors, gzip embeds
@@ -65,7 +67,8 @@ Open `http://localhost:5001` in a browser. Launch Albion. Events should start fl
 
 ### LAN access
 
-The radar is reachable from any device on the same LAN. The startup banner prints both URLs:
+By default, HTTP and WebSocket listen only on loopback. Start with `--lan` to
+allow viewing from other devices on the same LAN. The startup banner then prints both URLs:
 
 ```
 HTTP   Server: http://localhost:5001
@@ -75,7 +78,11 @@ WS     WebSocket: ws://localhost:5001/ws
 
 The frontend builds the WebSocket URL from `window.location`, so a phone or second laptop loading `http://<server-ip>:5001` gets a working radar without configuration. The capture interface settings UI is loopback-only: `POST /api/network/interfaces` returns 403 if `req.RemoteAddr` is not local. A LAN visitor sees a read-only view.
 
-The threat alert sound plays on the machine running the radar, never on the machine showing the page. `POST /api/alert/play` hands a file name and a volume to the Go process, which owns the audio device. A LAN visitor sees the preview button work and hears nothing locally. This is deliberate: a browser tab that is not in front cannot be relied on to make a sound, and the player watching the game is on the capture host.
+The threat alert sound plays on the machine running the radar. `POST /api/alert/play`
+hands a file name and a volume to the Go process, which owns the audio device.
+Like other mutation APIs, preview requests are restricted to the loopback client;
+remote LAN clients receive HTTP 403. Viewing the radar remotely does not move
+audio playback to that device.
 
 ## Build system
 
@@ -391,7 +398,8 @@ Go embed serves the JS that was present at the last `go build`. Either run with 
 
 ### Phone on LAN cannot reach the radar
 
-- Confirm Albion firewall rules allow inbound 5001 on the host.
+- Start OpenRadar with `--lan`; the default listener is loopback-only.
+- Confirm the host firewall allows OpenRadar's inbound TCP port 5001 on the intended local network.
 - Check the LAN URL printed by the startup banner; if `(LAN)` is missing, the adapter IP is not RFC1918 or not on a `wifi`/`ethernet` interface.
 - WebSocket URL is built from `window.location`, so a misrouted DNS or proxy can produce the symptom.
 

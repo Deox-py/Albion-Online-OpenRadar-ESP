@@ -27,26 +27,36 @@ export class WispCageHandler
     }
 
     newCageEvent(parameters) {
-        if (!settingsSync.getBool('settingCage')) return;
+        if (!settingsSync.getBool('settingCage', true)) return;
 
         const id = parameters[0];
-        const position = parameters[2];
+        const rawPosition = parameters[2];
+        const position = rawPosition?.data ?? rawPosition;
         const name = parameters[4];
 
-        if (id === undefined || position === undefined) return;
+        if (id === undefined || !Array.isArray(position) || position.length < 2 ||
+            !Number.isFinite(Number(position[0])) || !Number.isFinite(Number(position[1]))) {
+            window.logger?.debug(CATEGORIES.DUNGEONS, 'WispCage_InvalidLocation', {id, rawPosition});
+            return;
+        }
 
+        const posX = Number(position[0]);
+        const posY = Number(position[1]);
         const existing = this.cages.find(c => c.id === id);
         if (existing) {
+            existing.posX = posX;
+            existing.posY = posY;
+            existing.name = name;
             existing.touch();
             return;
         }
 
-        this.cages.push(new Cage(id, position[0], position[1], name));
+        this.cages.push(new Cage(id, posX, posY, name));
     }
 
     cageOpenedEvent(Parameters)
     {
-        if (!settingsSync.getBool('settingCage')) return;
+        if (!settingsSync.getBool('settingCage', true)) return;
 
         const id = Parameters[0];
 

@@ -3,11 +3,14 @@ package capture
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestConfigRoundTrip(t *testing.T) {
@@ -30,6 +33,55 @@ func TestConfigRoundTrip(t *testing.T) {
 	}
 	if got.CaptureInterfaces[0].Description != "Wi-Fi" {
 		t.Errorf("entry 0 description = %q, want Wi-Fi", got.CaptureInterfaces[0].Description)
+	}
+}
+
+func TestMutateConfigConcurrentUpdatesPreserveEveryChange(t *testing.T) {
+	dir := t.TempDir()
+	var wg sync.WaitGroup
+	errCh := make(chan error, 24)
+	for i := range 24 {
+		wg.Go(func() {
+			errCh <- MutateConfig(dir, func(cfg *Config) {
+				time.Sleep(time.Millisecond)
+				cfg.CaptureInterfaces = append(cfg.CaptureInterfaces, PersistedInterface{Name: fmt.Sprintf("interface-%d", i)})
+			})
+		})
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Errorf("concurrent update: %v", err)
+		}
+	}
+	cfg, err := ReadConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.CaptureInterfaces) != 24 {
+		t.Errorf("concurrent changes were lost: got %d interfaces, want 24", len(cfg.CaptureInterfaces))
+	}
+}
+
+func TestMigrateIPPreservesLoggingPreferences(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteConfig(dir, Config{Logging: LoggingConfig{ServerLogsEnabled: true, PcapRecording: true}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ip.txt"), []byte("192.168.1.2"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := MigrateIPTxt(dir, func(string) (PersistedInterface, error) { return PersistedInterface{Name: "ethernet"}, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ReadConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Logging.ServerLogsEnabled || !cfg.Logging.PcapRecording {
+		t.Errorf("legacy interface migration reset logging: %+v", cfg.Logging)
 	}
 }
 

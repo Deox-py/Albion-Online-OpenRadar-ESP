@@ -786,8 +786,8 @@ describe('HarvestablesHandler', () => {
     });
 
     describe('removeNotInRange', () => {
-        // @verified 2026-04-18: entities farther than 80 units are removed.
-        test('synthetic: removeNotInRange filters entities beyond 80 units', () => {
+        // @verified 2026-09-30: entities beyond the 120-unit retention window are removed.
+        test('synthetic: removeNotInRange filters entities beyond default 120 units', () => {
             const near = {0: 600, 5: 14, 6: -1, 7: 4, 8: [0, 0], 10: 2, 11: 0};
             const far  = {0: 601, 5: 14, 6: -1, 7: 4, 8: [200, 200], 10: 2, 11: 0};
             handler.newHarvestableObject(600, near);
@@ -799,12 +799,22 @@ describe('HarvestablesHandler', () => {
             expect(handler.getHarvestableList()[0].id).toBe(600);
         });
 
-        // @verified 2026-04-18: entities within 80 units are kept.
-        test('synthetic: removeNotInRange keeps entities within 80 units', () => {
-            const p = {0: 602, 5: 14, 6: -1, 7: 4, 8: [50, 0], 10: 2, 11: 0};
+        // @verified 2026-09-30: resources beyond the old 80-unit cutoff remain retained up to 120.
+        test('synthetic: removeNotInRange keeps entity at 100 units', () => {
+            const p = {0: 602, 5: 14, 6: -1, 7: 4, 8: [100, 0], 10: 2, 11: 0};
             handler.newHarvestableObject(602, p);
 
             handler.removeNotInRange(0, 0);
+
+            expect(handler.getSize()).toBe(1);
+        });
+
+        // @verified 2026-09-30: an invalid local position must not purge otherwise valid cached resources.
+        test('synthetic: invalid local position does not purge valid resources', () => {
+            const p = {0: 604, 5: 14, 6: -1, 7: 4, 8: [110, 0], 10: 2, 11: 0};
+            handler.newHarvestableObject(604, p);
+
+            handler.removeNotInRange(undefined, undefined);
 
             expect(handler.getSize()).toBe(1);
         });

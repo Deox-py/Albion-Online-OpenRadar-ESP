@@ -1,0 +1,461 @@
+{
+  "scenario": "small-treasures.synthetic",
+  "handler": "chests",
+  "provenance": {
+    "kind": "synthetic; catalog taxonomy only, not captured traffic",
+    "source": "https://github.com/ao-data/ao-bin-dumps/blob/47e4f5aca4d30b7495afa5a625ce0d5795e32050/mobs.json",
+    "category": "hiddentreasures; compact local category chest"
+  },
+  "messages": [
+    {
+      "kind": "event",
+      "catalogName": "T4_MOB_TN_FOREST_CHEST",
+      "parameters": {
+        "0": 1000,
+        "1": 822,
+        "2": 255,
+        "7": [
+          0,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T5_MOB_TN_FOREST_CHEST",
+      "parameters": {
+        "0": 1001,
+        "1": 823,
+        "2": 255,
+        "7": [
+          1,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T6_MOB_TN_FOREST_CHEST",
+      "parameters": {
+        "0": 1002,
+        "1": 824,
+        "2": 255,
+        "7": [
+          2,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T7_MOB_TN_FOREST_CHEST",
+      "parameters": {
+        "0": 1003,
+        "1": 825,
+        "2": 255,
+        "7": [
+          3,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T8_MOB_TN_FOREST_CHEST",
+      "parameters": {
+        "0": 1004,
+        "1": 826,
+        "2": 255,
+        "7": [
+          4,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T4_MOB_ROAMING_FOREST_CHEST",
+      "parameters": {
+        "0": 1005,
+        "1": 827,
+        "2": 255,
+        "7": [
+          5,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T4_MOB_ROAMING_HIGHLAND_CHEST",
+      "parameters": {
+        "0": 1006,
+        "1": 828,
+        "2": 255,
+        "7": [
+          6,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T4_MOB_ROAMING_SWAMP_CHEST",
+      "parameters": {
+        "0": 1007,
+        "1": 829,
+        "2": 255,
+        "7": [
+          7,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T4_MOB_ROAMING_MOUNTAIN_CHEST",
+      "parameters": {
+        "0": 1008,
+        "1": 830,
+        "2": 255,
+        "7": [
+          8,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T4_MOB_ROAMING_STEPPE_CHEST",
+      "parameters": {
+        "0": 1009,
+        "1": 831,
+        "2": 255,
+        "7": [
+          9,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T5_MOB_ROAMING_FOREST_CHEST",
+      "parameters": {
+        "0": 1010,
+        "1": 832,
+        "2": 255,
+        "7": [
+          10,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T5_MOB_ROAMING_HIGHLAND_CHEST",
+      "parameters": {
+        "0": 1011,
+        "1": 833,
+        "2": 255,
+        "7": [
+          11,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T5_MOB_ROAMING_SWAMP_CHEST",
+      "parameters": {
+        "0": 1012,
+        "1": 834,
+        "2": 255,
+        "7": [
+          12,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T5_MOB_ROAMING_MOUNTAIN_CHEST",
+      "parameters": {
+        "0": 1013,
+        "1": 835,
+        "2": 255,
+        "7": [
+          13,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T5_MOB_ROAMING_STEPPE_CHEST",
+      "parameters": {
+        "0": 1014,
+        "1": 836,
+        "2": 255,
+        "7": [
+          14,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T6_MOB_ROAMING_FOREST_CHEST",
+      "parameters": {
+        "0": 1015,
+        "1": 837,
+        "2": 255,
+        "7": [
+          15,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T6_MOB_ROAMING_HIGHLAND_CHEST",
+      "parameters": {
+        "0": 1016,
+        "1": 838,
+        "2": 255,
+        "7": [
+          16,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T6_MOB_ROAMING_SWAMP_CHEST",
+      "parameters": {
+        "0": 1017,
+        "1": 839,
+        "2": 255,
+        "7": [
+          17,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T6_MOB_ROAMING_MOUNTAIN_CHEST",
+      "parameters": {
+        "0": 1018,
+        "1": 840,
+        "2": 255,
+        "7": [
+          18,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T6_MOB_ROAMING_STEPPE_CHEST",
+      "parameters": {
+        "0": 1019,
+        "1": 841,
+        "2": 255,
+        "7": [
+          19,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T7_MOB_ROAMING_FOREST_CHEST",
+      "parameters": {
+        "0": 1020,
+        "1": 842,
+        "2": 255,
+        "7": [
+          20,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T7_MOB_ROAMING_HIGHLAND_CHEST",
+      "parameters": {
+        "0": 1021,
+        "1": 843,
+        "2": 255,
+        "7": [
+          21,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T7_MOB_ROAMING_SWAMP_CHEST",
+      "parameters": {
+        "0": 1022,
+        "1": 844,
+        "2": 255,
+        "7": [
+          22,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T7_MOB_ROAMING_MOUNTAIN_CHEST",
+      "parameters": {
+        "0": 1023,
+        "1": 845,
+        "2": 255,
+        "7": [
+          23,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T7_MOB_ROAMING_STEPPE_CHEST",
+      "parameters": {
+        "0": 1024,
+        "1": 846,
+        "2": 255,
+        "7": [
+          24,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T8_MOB_ROAMING_FOREST_CHEST",
+      "parameters": {
+        "0": 1025,
+        "1": 847,
+        "2": 255,
+        "7": [
+          25,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T8_MOB_ROAMING_HIGHLAND_CHEST",
+      "parameters": {
+        "0": 1026,
+        "1": 848,
+        "2": 255,
+        "7": [
+          26,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T8_MOB_ROAMING_SWAMP_CHEST",
+      "parameters": {
+        "0": 1027,
+        "1": 849,
+        "2": 255,
+        "7": [
+          27,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T8_MOB_ROAMING_MOUNTAIN_CHEST",
+      "parameters": {
+        "0": 1028,
+        "1": 850,
+        "2": 255,
+        "7": [
+          28,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    },
+    {
+      "kind": "event",
+      "catalogName": "T8_MOB_ROAMING_STEPPE_CHEST",
+      "parameters": {
+        "0": 1029,
+        "1": 851,
+        "2": 255,
+        "7": [
+          29,
+          0
+        ],
+        "13": 120,
+        "252": 123
+      }
+    }
+  ]
+}

@@ -3,6 +3,8 @@ import zonesDatabase from "../data/ZonesDatabase.js";
 import settingsSync from "../utils/SettingsSync.js";
 import alertSound from "../utils/AlertSound.js";
 
+const MAX_TRACKED_PLAYERS = 200;
+
 class Player {
     constructor(posX, posY, id, nickname, guildName1, faction, allianceName, equipments, spells) {
         this.posX = posX;
@@ -164,11 +166,15 @@ export class PlayersHandler {
     }
 
     handleNewPlayerEvent(id, Parameters) {
-        // 🔍 Check if player detection is enabled
-        if (!settingsSync.getBool('settingShowPlayers')) {
-            return 2; // Skip detection if disabled
+        const parsedId = Number(id);
+        if (!Number.isInteger(parsedId) || parsedId < 0) {
+            window.logger?.warn(CATEGORIES.PLAYERS, 'PlayerDetected_InvalidId', {id});
+            return 2;
         }
 
+        // Detection state is kept even while the UI is hidden so toggling
+        // "Mostrar jugadores" does not lose players already announced by the server.
+        const showPlayers = settingsSync.getBool('settingShowPlayers', true);
         const nickname = Parameters[1];
         const guildName = Parameters[8];
         const faction = Parameters[53] ?? 0; // 0=passive, 1-6=faction, 255=hostile
@@ -179,9 +185,8 @@ export class PlayersHandler {
         const hasAllianceName = Parameters[51] !== undefined;
         const hasFaction = Parameters[53] !== undefined;
 
-        const existingPlayer = this.playersList.find(player => player.id === id);
-        const parsedMaxPlayers = settingsSync.getNumber('settingMaxPlayersDisplay', 50);
-        const maxPlayers = Math.min(100, parsedMaxPlayers);
+        const existingPlayer = this.playersList.find(player => player.id === parsedId);
+        const isNewPlayer = !existingPlayer;
 
         if (existingPlayer) {
             if (Array.isArray(equipments) && equipments.length > 0) {
@@ -195,8 +200,15 @@ export class PlayersHandler {
             if (hasAllianceName) existingPlayer.allianceName = allianceName;
             if (hasFaction) existingPlayer.faction = faction;
             existingPlayer.touch();
-        } else if (this.playersList.length < maxPlayers) {
-            const player = new Player(0, 0, id, nickname, guildName, faction, allianceName, equipments, spells);
+        } else {
+            if (this.playersList.length >= MAX_TRACKED_PLAYERS) {
+                this.playersList.sort((a, b) => a.lastUpdateTime - b.lastUpdateTime);
+                const evicted = this.playersList.shift();
+                window.logger?.debug(CATEGORIES.PLAYERS, 'PlayerTrackingEvictedOldest', {
+                    evictedId: evicted?.id, maxTracked: MAX_TRACKED_PLAYERS
+                });
+            }
+            const player = new Player(0, 0, parsedId, nickname, guildName, faction, allianceName, equipments, spells);
             this.playersList.push(player);
         }
 
@@ -217,11 +229,11 @@ export class PlayersHandler {
             playersCount: this.playersList.length
         });
 
-        if (isThreat && mapId && settingsSync.getBool('settingFlash')) {
+        if (isNewPlayer && showPlayers && isThreat && mapId && settingsSync.getBool('settingFlash')) {
             this.triggerScreenFlash();
         }
 
-        if (isThreat && mapId && settingsSync.getBool('settingSound')) {
+        if (isNewPlayer && showPlayers && isThreat && mapId && settingsSync.getBool('settingSound')) {
             this.playThreatSound();
         }
 
@@ -361,10 +373,10 @@ export class PlayersHandler {
 
     /**
      * Enforce maximum list size (already enforced in handleNewPlayerEvent, but this is explicit)
-     * @param {number} maxSize - Maximum players (default: 50)
+     * @param {number} maxSize - Maximum tracked players (default: 200)
      * @returns {number} - Number of players removed
      */
-    enforceMaxSize(maxSize = 50) {
+    enforceMaxSize(maxSize = MAX_TRACKED_PLAYERS) {
         if (this.playersList.length <= maxSize) return 0;
 
         // Sort by lastUpdateTime (oldest first) and keep newest
@@ -390,12 +402,13 @@ export class PlayersHandler {
      * @returns {Player[]} - Filtered list of players
      */
     getFilteredPlayers() {
-        const showPassive = settingsSync.getBool('settingPassivePlayers') ?? true;
-        const showFaction = settingsSync.getBool('settingFactionPlayers') ?? true;
-        const showDangerous = settingsSync.getBool('settingDangerousPlayers') ?? true;
+        const showPassive = settingsSync.getBool('settingPassivePlayers', true);
+        const showFaction = settingsSync.getBool('settingFactionPlayers', true);
+        const showDangerous = settingsSync.getBool('settingDangerousPlayers', true);
 
         const pvpType = zonesDatabase.getPvpType(window.currentMapId);
 
+        const maxVisible = Math.max(1, Math.min(100, settingsSync.getNumber('settingMaxPlayersDisplay', 100)));
         return this.playersList.filter(player => {
             // In blackzone, ALL players are threats - use showDangerous setting
             if (pvpType === 'black') {
@@ -406,7 +419,7 @@ export class PlayersHandler {
             if (player.isPassive()) return showPassive;
             if (player.isFactionPlayer()) return showFaction;
             return showDangerous;
-        });
+        }).sort((a, b) => b.lastUpdateTime - a.lastUpdateTime).slice(0, maxVisible);
     }
 
     getPlayersByType() {

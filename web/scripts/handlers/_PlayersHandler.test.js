@@ -127,24 +127,40 @@ describe('PlayersHandler', () => {
             expect(result).toBe(2);
         });
 
-        // @verified 2026-04-18: settingShowPlayers=false causes early return with no entity added.
-        test('synthetic: settingShowPlayers=false skips detection and returns 2', () => {
+        // @verified 2026-09-30: duplicate NewCharacter events must not spam threat alerts.
+        test('synthetic: duplicate hostile spawn alerts only once', () => {
+            zonesDatabase.getPvpType.mockReturnValue('black');
+            const playSpy = vi.spyOn(handler, 'playThreatSound').mockImplementation(() => {});
+            const params = {1: 'Hostile', 8: '', 53: 0, 51: null, 40: [], 43: []};
+
+            handler.handleNewPlayerEvent(42, params);
+            handler.handleNewPlayerEvent(42, params);
+
+            expect(playSpy).toHaveBeenCalledTimes(1);
+        });
+
+        // @verified 2026-09-30: hiding the UI no longer discards passive detection state.
+        test('synthetic: settingShowPlayers=false keeps detection state but suppresses new-player alerts', () => {
             settingsSync.getBool.mockImplementation(k => k !== 'settingShowPlayers');
+            zonesDatabase.getPvpType.mockReturnValue('black');
+            const playSpy = vi.spyOn(handler, 'playThreatSound').mockImplementation(() => {});
 
             const result = handler.handleNewPlayerEvent(1, {1: 'Bob', 8: '', 53: 0, 51: null, 40: [], 43: []});
 
-            expect(handler.getSize()).toBe(0);
+            expect(handler.getSize()).toBe(1);
+            expect(playSpy).not.toHaveBeenCalled();
             expect(result).toBe(2);
         });
 
-        // @verified 2026-04-18: when list is at max capacity, new spawn is silently dropped.
-        test('synthetic: list at maxPlayers capacity prevents insertion', () => {
+        // @verified 2026-09-30: display limit no longer truncates the tracked player cache.
+        test('synthetic: settingMaxPlayersDisplay limits visibility but not tracked players', () => {
             settingsSync.getNumber.mockImplementation((k, d) => k === 'settingMaxPlayersDisplay' ? 2 : d);
             handler.handleNewPlayerEvent(1, {1: 'A', 8: '', 53: 0, 51: null, 40: [], 43: []});
             handler.handleNewPlayerEvent(2, {1: 'B', 8: '', 53: 0, 51: null, 40: [], 43: []});
             handler.handleNewPlayerEvent(3, {1: 'C', 8: '', 53: 0, 51: null, 40: [], 43: []});
 
-            expect(handler.getSize()).toBe(2);
+            expect(handler.getSize()).toBe(3);
+            expect(handler.getFilteredPlayers()).toHaveLength(2);
         });
 
         // @verified 2026-04-18: passive player in safe zone does not trigger audio.

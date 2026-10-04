@@ -83,6 +83,18 @@ describe('MistsWispDrawing', () => {
         );
     });
 
+    // @verified 2026-09-30: malformed/out-of-range enchant values are normalized to supported E0-E4 icons.
+    test('MIST-1: out-of-range enchant clamps to E4', () => {
+        settingsSync.getBool.mockImplementation(() => true);
+        const mist = {id: 1, hX: 10, hY: 20, type: 0, enchant: 9};
+
+        drawing.invalidate(ctx, [mist]);
+
+        expect(drawing.DrawCustomImage).toHaveBeenCalledWith(
+            ctx, 10, 20, 'mist_4', 'Resources', 21
+        );
+    });
+
     // @verified 2026-04-23: duo feu follet skipped when settingMistDuo=false.
     test('MIST-1: settingMistDuo=false skips duo feu follet', () => {
         settingsSync.getBool.mockImplementation(key => key !== 'settingMistDuo');

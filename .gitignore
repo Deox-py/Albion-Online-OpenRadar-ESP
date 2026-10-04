@@ -110,3 +110,9 @@ captures/
 /specs/
 /.specify/
 /work
+
+# Local builder, QA output and source backup
+/.build/
+/build-logs/
+/cmd/launcher/*.syso
+/cmd/radar/*.syso

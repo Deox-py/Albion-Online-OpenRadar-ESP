@@ -8,7 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
+
+// Serialize the complete read/modify/replace transaction. This also keeps readers
+// from holding a Windows file handle across the atomic replacement.
+var configMu sync.RWMutex
 
 const (
 	configFilename   = "network.json"
@@ -31,6 +36,12 @@ type Config struct {
 }
 
 func ReadConfig(appDir string) (Config, error) {
+	configMu.RLock()
+	defer configMu.RUnlock()
+	return readConfig(appDir)
+}
+
+func readConfig(appDir string) (Config, error) {
 	path := filepath.Join(appDir, configFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -47,14 +58,33 @@ func ReadConfig(appDir string) (Config, error) {
 }
 
 func WriteConfig(appDir string, cfg Config) error {
+	configMu.Lock()
+	defer configMu.Unlock()
+	return writeConfig(appDir, cfg)
+}
+
+func writeConfig(appDir string, cfg Config) error {
 	path := filepath.Join(appDir, configFilename)
-	tmp := path + ".tmp"
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	f, err := os.CreateTemp(appDir, ".network-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create config temp: %w", err)
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp) //nolint:errcheck // temp is already renamed on success
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("write tmp: %w", err)
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("sync tmp: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close tmp: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
@@ -65,17 +95,21 @@ func WriteConfig(appDir string, cfg Config) error {
 
 // MutateConfig reads the config, applies the mutator, and writes atomically.
 func MutateConfig(appDir string, mutate func(*Config)) error {
-	cfg, err := ReadConfig(appDir)
+	configMu.Lock()
+	defer configMu.Unlock()
+	cfg, err := readConfig(appDir)
 	if err != nil {
 		return err
 	}
 	mutate(&cfg)
-	return WriteConfig(appDir, cfg)
+	return writeConfig(appDir, cfg)
 }
 
 type IPResolver func(ip string) (PersistedInterface, error)
 
 func MigrateIPTxt(appDir string, resolve IPResolver) (bool, error) {
+	configMu.Lock()
+	defer configMu.Unlock()
 	ipPath := filepath.Join(appDir, legacyIPFilename)
 	data, err := os.ReadFile(ipPath)
 	if err != nil {
@@ -89,7 +123,7 @@ func MigrateIPTxt(appDir string, resolve IPResolver) (bool, error) {
 		_ = os.Remove(ipPath)
 		return false, nil
 	}
-	existing, err := ReadConfig(appDir)
+	existing, err := readConfig(appDir)
 	if err != nil {
 		return false, fmt.Errorf("read existing config before migration: %w", err)
 	}
@@ -105,8 +139,8 @@ func MigrateIPTxt(appDir string, resolve IPResolver) (bool, error) {
 		_ = os.Remove(ipPath)
 		return false, fmt.Errorf("resolve legacy ip %q: %w", ip, err)
 	}
-	cfg := Config{CaptureInterfaces: []PersistedInterface{entry}}
-	if err := WriteConfig(appDir, cfg); err != nil {
+	existing.CaptureInterfaces = []PersistedInterface{entry}
+	if err := writeConfig(appDir, existing); err != nil {
 		return false, err
 	}
 	_ = os.Remove(ipPath)

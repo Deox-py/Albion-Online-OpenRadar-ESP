@@ -23,6 +23,9 @@ import {CATEGORIES} from '../constants/LoggerConstants.js';
 import {createRadarRenderer} from './RadarRenderer.js';
 import {destroyEventQueue, getEventQueue} from './WebSocketEventQueue.js';
 import pictureInPictureManager from './PictureInPictureManager.js';
+import {invalidateRadarState, clearStreamWarning} from './StreamHealth.js';
+import {initMapIdentity} from './MapIdentity.js';
+import {EventInspector} from './EventInspector.js';
 
 import * as WebSocketManager from '../core/WebSocketManager.js';
 import * as DatabaseLoader from '../core/DatabaseLoader.js';
@@ -37,6 +40,8 @@ let playerListIntervalId = null;
 let cleanupIntervalId = null;
 let buttonClickHandler = null;
 let lastPlayerListHash = '';
+let mapIdentityControls = null;
+let eventInspector = null;
 
 let handlers = {
     harvestables: null, mobs: null, players: null, chests: null,
@@ -130,6 +135,8 @@ function clearHandlers(preserveSession = false) {
     handlers.mobs.Clear();
     handlers.players.Clear();
     handlers.wispCage.Clear();
+    handlers.mistsDungeon.Clear();
+    if (radarRenderer) radarRenderer.cachedClusters = null;
 
     if (!preserveSession) {
         try {
@@ -140,7 +147,8 @@ function clearHandlers(preserveSession = false) {
     }
 }
 
-export async function initRadar() {
+export async function initRadar(signal) {
+    if (signal?.aborted) return;
     if (isInitialized) {
         window.logger?.warn(CATEGORIES.SYSTEM, 'RadarAlreadyInitialized', {});
         return;
@@ -148,12 +156,14 @@ export async function initRadar() {
 
     while (isDestroying) {
         await new Promise(resolve => setTimeout(resolve, 10));
+        if (signal?.aborted) return;
     }
 
     window.logger?.info(CATEGORIES.SYSTEM, 'RadarInitializing', {});
 
     try {
         await DatabaseLoader.load();
+        if (signal?.aborted) return;
 
         drawingUtils = new DrawingUtils();
         map = new MapH(-1);
@@ -200,10 +210,18 @@ export async function initRadar() {
 
         EventRouter.restoreMistOverrideFromSession();
         EventRouter.restoreMapFromSession();
+        mapIdentityControls = initMapIdentity();
 
         // Prepare the event pipeline before opening the socket so an unusually
         // fast first message can never arrive before the queue callback exists.
         eventQueue = getEventQueue();
+        eventQueue.setMapContextCallback(context => EventRouter.applyObservedMapContext(context));
+        eventQueue.setResetCallback((reason) => {
+            EventRouter.clearMapIdentity();
+            invalidateRadarState(handlers, radarRenderer, reason);
+            PlayerListRenderer.reset();
+            lastPlayerListHash = '';
+        });
         eventQueue.setFlushCallback((messageType, params) => {
             switch (messageType) {
                 case 'request':
@@ -213,14 +231,20 @@ export async function initRadar() {
                     EventRouter.onEvent(params);
                     break;
                 case 'response':
-                    EventRouter.onResponse(params, () => clearHandlers(true));
+                    EventRouter.onResponse(params, () => {
+                        clearHandlers(true);
+                        clearStreamWarning();
+                    });
                     break;
             }
         });
 
+        eventInspector = new EventInspector({root: document.getElementById('eventInspector')});
         WebSocketManager.setMessageCallback((data) => {
+            eventInspector?.receive(data);
             eventQueue.queueRawMessage(data);
         });
+        WebSocketManager.setStateResetCallback((reason) => eventQueue?.reset(reason));
         WebSocketManager.connect();
 
         initializeRadarRenderer();
@@ -253,13 +277,17 @@ export async function initRadar() {
         }
 
     } catch (error) {
+        eventInspector?.destroy();
+        eventInspector = null;
         window.logger?.error(CATEGORIES.SYSTEM, 'RadarInitFailed', {error: error.message});
-        if (window.toast) window.toast.error('Failed to initialize radar');
+        if (window.toast) window.toast.error('No se pudo inicializar el radar');
         throw error;
     }
 }
 
 export function destroyRadar() {
+    eventInspector?.destroy();
+    eventInspector = null;
     if (!isInitialized) {
         window.logger?.warn(CATEGORIES.SYSTEM, 'RadarNotInitialized', {});
         return;
@@ -293,6 +321,8 @@ export function destroyRadar() {
         radarRenderer = null;
     }
 
+    mapIdentityControls?.destroy();
+    mapIdentityControls = null;
     destroyEventQueue();
     eventQueue = null;
 

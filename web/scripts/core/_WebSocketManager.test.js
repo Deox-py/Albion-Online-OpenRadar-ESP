@@ -94,4 +94,26 @@ describe('WebSocketManager reconnect lifecycle', () => {
         expect(FakeWebSocket.instances).toHaveLength(1);
         expect(manager.getStatus()).toBe('disconnected');
     });
+
+    test('invalidates radar state when an established connection is lost', async () => {
+        const manager = await import('./WebSocketManager.js');
+        const reset = vi.fn();
+        manager.setStateResetCallback(reset);
+        manager.connect();
+        FakeWebSocket.instances[0].emit('open');
+        FakeWebSocket.instances[0].emit('close');
+        expect(reset).toHaveBeenCalledExactlyOnceWith('connection-lost');
+        manager.disconnect();
+    });
+
+    test('intentional navigation disconnect does not invalidate or warn', async () => {
+        const manager = await import('./WebSocketManager.js');
+        const reset = vi.fn();
+        manager.setStateResetCallback(reset);
+        manager.connect();
+        FakeWebSocket.instances[0].emit('open');
+        manager.disconnect();
+        FakeWebSocket.instances[0].emit('close');
+        expect(reset).not.toHaveBeenCalled();
+    });
 });

@@ -44,6 +44,7 @@ export class NetworkSettingsHandler {
                 <button class="btn btn-sm" data-action="refresh">Actualizar lista</button>
                 <button class="btn btn-sm btn-primary" data-action="apply" disabled>Aplicar cambios</button>
             </div>
+            ${this.renderDiagnostics()}
             <h3 class="text-base font-semibold mt-6">Acceso LAN</h3>
             <p class="text-sm opacity-70">Accesible desde dispositivos de la misma red local. Es independiente de las interfaces de captura seleccionadas arriba.</p>
             <ul class="list-disc pl-5">${lan || '<li class="opacity-60">Acceso LAN desactivado. Inicia OpenRadar con <code>--lan</code> si realmente lo necesitas.</li>'}</ul>
@@ -66,6 +67,19 @@ export class NetworkSettingsHandler {
                 </div>
             </div>
         `;
+    }
+
+    renderDiagnostics() {
+        const stats = this.state?.captureDiagnostics;
+        if (!stats) return '';
+        const count = value => Number.isSafeInteger(value) && value >= 0 ? String(value) : '—';
+        return `<div class="mt-4 text-sm" data-capture-diagnostics>
+            <h3 class="font-semibold">Diagnóstico de captura</h3>
+            <p>Tramas truncadas: ${count(stats.truncatedFrames)}</p>
+            <p>Errores de decodificación: ${count(stats.decodeErrors)}</p>
+            <p>Fragmentos IPv4 omitidos: ${count(stats.ipv4FragmentsSkipped)}</p>
+            <p class="text-xs opacity-70">Contadores de las interfaces activas; sólo tramas que pasan el filtro de captura. Los fragmentos IPv4 se omiten sin reensamblar. Los fragmentos Photon tienen su propio contador.</p>
+        </div>`;
     }
 
     renderBanner() {

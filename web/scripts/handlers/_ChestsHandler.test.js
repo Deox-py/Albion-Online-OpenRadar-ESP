@@ -41,22 +41,22 @@ describe('ChestsHandler', () => {
             expect(handler.chestsList[0].chestName).toBe('KEEPER_DYNAMIC_CAMP_PERSONAL_SMALL_LC');
         });
 
-        // @verified 2026-04-18: addChestEvent with chestName containing "mist" falls back to Parameters[4].
-        test('synthetic: mist chestName falls back to Parameters[4]', () => {
+        test('synthetic: mist logical type and model remain separate', () => {
             const p = {0: 2, 1: [5, 15], 3: 'MIST_LOOTCHEST_SMALL', 4: 'MIST_OVERRIDE_NAME'};
 
             handler.addChestEvent(p);
 
-            expect(handler.chestsList[0].chestName).toBe('MIST_OVERRIDE_NAME');
+            expect(handler.chestsList[0].chestName).toBe('MIST_LOOTCHEST_SMALL');
+            expect(handler.chestsList[0].modelName).toBe('MIST_OVERRIDE_NAME');
         });
 
-        // @verified 2026-04-18: mist match is case-insensitive because the code uses toLowerCase() before includes().
-        test('synthetic: mist match is case-insensitive', () => {
+        test('synthetic: original type name casing is preserved', () => {
             const p = {0: 3, 1: [0, 0], 3: 'MiSt_LOOTCHEST', 4: 'override'};
 
             handler.addChestEvent(p);
 
-            expect(handler.chestsList[0].chestName).toBe('override');
+            expect(handler.chestsList[0].typeName).toBe('MiSt_LOOTCHEST');
+            expect(handler.chestsList[0].modelName).toBe('override');
         });
 
         // @verified 2026-04-19: addChestEvent guards typeof Parameters[3] before toLowerCase; undefined no longer throws.
@@ -65,13 +65,13 @@ describe('ChestsHandler', () => {
             expect(() => handler.addChestEvent(p)).not.toThrow();
         });
 
-        // @verified 2026-04-19: rarity persisted from Parameters[5] on the stored Chest entity (#29 handler-layer root cause).
-        test('pcap-derived spawn preserves Parameters[5] rarity on the stored Chest entity', async () => {
+        test('pcap-derived spawn keeps P5 raw without claiming loot rarity', async () => {
             const fx = await loadFixture('chests', 'spawn');
             const p = normalizeParams(fx.messages[0].parameters);
             handler.addChestEvent(p);
             const stored = handler.chestsList[0];
-            expect(stored.rarity).toBe(p[5]);
+            expect(stored.rarity).toBeNull();
+            expect(stored.rawState).toBe(4);
         });
 
         // @verified 2026-04-19: contract test, addChest without rarity defaults to null on the stored Chest entity.

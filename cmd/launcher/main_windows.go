@@ -3,9 +3,7 @@
 package main
 
 import (
-	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -42,6 +40,11 @@ func main() {
 		fmt.Printf("OpenRadar v%s (built: %s)\n", Version, BuildTime)
 		return
 	}
+	if err := validateEmbeddedCore(corePayload); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		messageBox("OpenRadar - compilación incompleta", err.Error(), mbOK|mbIconError)
+		os.Exit(1)
+	}
 
 	if !npcapRuntimePresent() {
 		if !promptInstallNpcap() {
@@ -71,7 +74,7 @@ func main() {
 		return
 	}
 
-	cmd := exec.Command(corePath, os.Args[1:]...)
+	cmd := exec.Command(corePath, os.Args[1:]...) // #nosec G204 G702 -- Runs the hash-verified embedded core with caller CLI arguments, without a shell or request input.
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -104,7 +107,7 @@ func npcapRuntimePresent() bool {
 		filepath.Join(windir, "System32", "wpcap.dll"),
 	}
 	for _, p := range candidates {
-		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() { // #nosec G703 -- Reads fixed Npcap DLL names beneath the local Windows directory, never a request path.
 			return true
 		}
 	}
@@ -152,7 +155,7 @@ func installNpcap() error {
 	}
 	if n > maxNpcapBytes {
 		_ = os.Remove(installer)
-		return fmt.Errorf("la descarga superó el límite esperado")
+		return errors.New("la descarga superó el límite esperado")
 	}
 
 	if err := verifyAuthenticode(installer); err != nil {
@@ -160,7 +163,7 @@ func installNpcap() error {
 		return fmt.Errorf("verificación de firma: %w", err)
 	}
 
-	cmd := exec.Command(installer)
+	cmd := exec.Command(installer) // #nosec G204 -- Fixed local Npcap filename downloaded from the constant official URL and signature-verified above; no shell.
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -173,7 +176,7 @@ func installNpcap() error {
 func verifyAuthenticode(path string) error {
 	escaped := strings.ReplaceAll(path, "'", "''")
 	script := fmt.Sprintf(`$s=Get-AuthenticodeSignature -LiteralPath '%s'; if($s.Status -ne 'Valid'){Write-Error ('Firma no válida: ' + $s.Status); exit 1}; Write-Output $s.SignerCertificate.Subject`, escaped)
-	out, err := exec.Command("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script).CombinedOutput()
+	out, err := exec.Command("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script).CombinedOutput() // #nosec G204 -- Fixed verification script; the local installer path is escaped as a PowerShell single-quoted literal.
 	if err != nil {
 		return fmt.Errorf("%v (%s)", err, strings.TrimSpace(string(out)))
 	}
@@ -192,8 +195,6 @@ func waitForNpcap(timeout time.Duration) bool {
 }
 
 func materializeCore() (string, error) {
-	sum := sha256.Sum256(corePayload)
-	hash := hex.EncodeToString(sum[:8])
 	base := os.Getenv("LOCALAPPDATA")
 	if base == "" {
 		var err error
@@ -202,34 +203,7 @@ func materializeCore() (string, error) {
 			return "", err
 		}
 	}
-	dir := filepath.Join(base, "OpenRadar-2.3ESP_Deox", "bin", hash)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	target := filepath.Join(dir, "OpenRadar-core.exe")
-
-	if sameFileHash(target, corePayload) {
-		return target, nil
-	}
-	tmp := target + ".tmp"
-	if err := os.WriteFile(tmp, corePayload, 0o700); err != nil {
-		return "", err
-	}
-	if err := os.Rename(tmp, target); err != nil {
-		_ = os.Remove(tmp)
-		return "", err
-	}
-	return target, nil
-}
-
-func sameFileHash(path string, expected []byte) bool {
-	data, err := os.ReadFile(path)
-	if err != nil || len(data) != len(expected) {
-		return false
-	}
-	a := sha256.Sum256(data)
-	b := sha256.Sum256(expected)
-	return a == b
+	return materializeCoreAt(base, corePayload)
 }
 
 const (
@@ -247,6 +221,6 @@ func messageBox(title, text string, flags uintptr) int {
 	proc := user32.NewProc("MessageBoxW")
 	t, _ := syscall.UTF16PtrFromString(text)
 	c, _ := syscall.UTF16PtrFromString(title)
-	ret, _, _ := proc.Call(0, uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(c)), flags)
+	ret, _, _ := proc.Call(0, uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(c)), flags) // #nosec G103 -- MessageBoxW requires pointers to the UTF-16 strings; the synchronous Win32 call does not retain them.
 	return int(ret)
 }

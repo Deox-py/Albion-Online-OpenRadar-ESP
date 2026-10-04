@@ -115,6 +115,7 @@ lint-fix: ## Lint and auto-fix
 	npm run lint:fix
 
 qa: test lint ## Run the complete quality gate
+	npm run typecheck
 	@echo "QA completed successfully for OpenRadar 2.3ESP_Deox"
 
 qa-static: ## Run offline static QA

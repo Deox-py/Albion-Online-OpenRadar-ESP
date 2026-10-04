@@ -20,6 +20,7 @@ describe('ChestsDrawing', () => {
         vi.clearAllMocks();
         drawing = new ChestsDrawing();
         drawing.DrawCustomImage = vi.fn();
+        drawing.drawNeutralChest = vi.fn();
         drawing.transformPoint = vi.fn((x, y) => ({x, y}));
         drawing.interpolateEntity = vi.fn();
         ctx = {};
@@ -27,7 +28,7 @@ describe('ChestsDrawing', () => {
 
     // @verified 2026-04-23: setting key is settingChestGreen.
     test('settingChestGreen=true with standard chestName renders green asset', () => {
-        settingsSync.getBool.mockImplementation(key => key === 'settingChestGreen');
+        settingsSync.getBool.mockImplementation((key, fallback = false) => key === 'settingChestGreen' || fallback);
         const chest = {hX: 10, hY: 20, chestName: 'TREASURE_STANDARD_01'};
 
         drawing.invalidate(ctx, [chest]);
@@ -37,7 +38,7 @@ describe('ChestsDrawing', () => {
 
     // @verified 2026-04-23: setting key is settingChestBlue.
     test('settingChestBlue=true with uncommon chestName renders blue asset', () => {
-        settingsSync.getBool.mockImplementation(key => key === 'settingChestBlue');
+        settingsSync.getBool.mockImplementation((key, fallback = false) => key === 'settingChestBlue' || fallback);
         const chest = {hX: 10, hY: 20, chestName: 'TREASURE_UNCOMMON_02'};
 
         drawing.invalidate(ctx, [chest]);
@@ -47,7 +48,7 @@ describe('ChestsDrawing', () => {
 
     // @verified 2026-04-23: setting key is settingChestPurple.
     test('settingChestPurple=true with rare chestName renders rare asset', () => {
-        settingsSync.getBool.mockImplementation(key => key === 'settingChestPurple');
+        settingsSync.getBool.mockImplementation((key, fallback = false) => key === 'settingChestPurple' || fallback);
         const chest = {hX: 10, hY: 20, chestName: 'TREASURE_RARE_03'};
 
         drawing.invalidate(ctx, [chest]);
@@ -57,7 +58,7 @@ describe('ChestsDrawing', () => {
 
     // @verified 2026-04-23: setting key is settingChestYellow.
     test('settingChestYellow=true with legendary chestName renders legendary asset', () => {
-        settingsSync.getBool.mockImplementation(key => key === 'settingChestYellow');
+        settingsSync.getBool.mockImplementation((key, fallback = false) => key === 'settingChestYellow' || fallback);
         const chest = {hX: 10, hY: 20, chestName: 'TREASURE_LEGENDARY_04'};
 
         drawing.invalidate(ctx, [chest]);
@@ -65,14 +66,14 @@ describe('ChestsDrawing', () => {
         expect(drawing.DrawCustomImage).toHaveBeenCalledWith(ctx, 10, 20, 'legendary', 'Resources', 35);
     });
 
-    // @verified 2026-04-23: color-named suffix (green/blue/rare/legendary keywords) also triggers the corresponding branch.
-    test('chestName with color keyword triggers matching rarity branch', () => {
+    test('a geographic/model color does not become loot rarity', () => {
         settingsSync.getBool.mockImplementation(() => true);
         const chest = {hX: 5, hY: 5, chestName: 'SWAMP_RED_LOOTCHEST_GREEN_01'};
 
         drawing.invalidate(ctx, [chest]);
 
-        expect(drawing.DrawCustomImage).toHaveBeenCalledWith(ctx, 5, 5, 'green', 'Resources', 35);
+        expect(drawing.DrawCustomImage).not.toHaveBeenCalled();
+        expect(drawing.drawNeutralChest).toHaveBeenCalledWith(ctx, 5, 5);
     });
 
     // @verified 2026-04-23: all settings off skip every chest entirely.

@@ -12,6 +12,7 @@ let socket = null;
 let reconnectTimeoutId = null;
 let reconnectAttempts = 0;
 let messageCallback = null;
+let stateResetCallback = null;
 let isActive = false;  // Guard for cleanup during destroy
 let isGracefulDisconnect = false;  // Distinguish intentional disconnect from connection loss
 
@@ -43,6 +44,7 @@ function onSocketClose() {
     // Guard: Don't handle close events after destroy
     if (!isActive) return;
 
+    if (window.wsConnectionStatus === 'connected') stateResetCallback?.('connection-lost');
     updateConnectionStatus('disconnected');
     window.logger?.warn(CATEGORIES.NETWORK, 'WebSocketDisconnected', {});
     scheduleReconnect();
@@ -123,6 +125,11 @@ export function disconnect() {
     cleanupSocket({resetAttempts: true});
     updateConnectionStatus('disconnected');
     messageCallback = null;  // Clear callback to prevent memory leaks
+    stateResetCallback = null;
+}
+
+export function setStateResetCallback(callback) {
+    stateResetCallback = callback;
 }
 
 export function setMessageCallback(callback) {

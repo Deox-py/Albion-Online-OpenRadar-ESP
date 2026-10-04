@@ -59,7 +59,7 @@ describe('DungeonsHandler', () => {
             expect(d.name).toBe('MISTS_DUO_BLACK');
             expect(d.type).toBe(1); // DungeonType.Group
             expect(d.enchant).toBe(2);
-            expect(settingsSync.getBool).toHaveBeenCalledWith('settingMistE2');
+            expect(settingsSync.getBool).toHaveBeenCalledWith('settingMistE2', true);
         });
 
         // @verified 2026-09-03: pcap-derived, same capture. Re-firing the wisp portal event deduplicates on id.

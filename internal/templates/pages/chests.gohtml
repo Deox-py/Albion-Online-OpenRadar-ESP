@@ -13,7 +13,7 @@
         <i data-lucide="construction" class="w-5 h-5 text-warning"></i>
         <div>
             <h3 class="font-bold text-warning">Funciones experimentales</h3>
-            <p class="text-sm">La detección de cofres sigue en desarrollo. Algunos elementos pueden mostrarse de forma incorrecta o no aparecer.</p>
+            <p class="text-sm">La detección de cofres sigue en desarrollo. Las opciones de Nieblas usan el flujo post-Dragonfire; los IDs de depuración permanecen desactivados por defecto.</p>
         </div>
     </div>
 
@@ -24,7 +24,7 @@
                 <i data-lucide="archive" class="w-5 h-5 text-warning"></i>
                 Cofres
             </h2>
-            <p class="text-base-content/60 text-sm mb-4">Selecciona qué rarezas de cofres se mostrarán en el radar.</p>
+            <p class="text-base-content/60 text-sm mb-4">Selecciona las rarezas y los tipos de cofres que se mostrarán en el radar. Los cofres detectados sin rareza confirmada se muestran con un símbolo neutro.</p>
             <div class="flex flex-wrap gap-4">
                 <label class="flex items-center gap-2 cursor-pointer group">
                     <input type="checkbox" id="settingChestGreen" class="checkbox checkbox-success">
@@ -57,6 +57,30 @@
                     <div class="tooltip" data-tip="Cofres de botín legendarios">
                         <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                     </div>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" id="settingChestUnknown" class="checkbox">
+                    <span class="w-3 h-3 rounded-full border border-base-content/50"></span>
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Rareza desconocida</span>
+                    <div class="tooltip" data-tip="Cofres observados sin rareza confirmada">
+                        <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
+                    </div>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" id="settingChestAvalon" class="checkbox">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Avalon</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" id="settingChestCamp" class="checkbox">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Campamentos</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" id="settingChestSmallTreasure" class="checkbox">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Pequeños tesoros</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" id="settingChestOther" class="checkbox">
+                    <span class="text-base-content/80 group-hover:text-base-content transition-colors font-medium">Otros</span>
                 </label>
             </div>
         </div>
@@ -280,10 +304,19 @@
             };
 
             // Chests
-            ["settingChestGreen", "settingChestBlue", "settingChestPurple", "settingChestYellow"].forEach(bindCheckbox);
+            const chestDefaultOn = ["settingChestUnknown", "settingChestAvalon", "settingChestCamp", "settingChestSmallTreasure", "settingChestOther"];
+            chestDefaultOn.forEach(id => {
+                if (settingsSync.get(id) === null) settingsSync.setBool(id, true);
+            });
+            ["settingChestGreen", "settingChestBlue", "settingChestPurple", "settingChestYellow", ...chestDefaultOn].forEach(bindCheckbox);
 
-            // Mists
-            ["settingMistSolo", "settingMistDuo", "settingMistE0", "settingMistE1", "settingMistE2", "settingMistE3", "settingMistE4", "settingCage", "settingWispSpawn", "settingWispSpawnDebugID", "settingShowKnightfallAbbey"].forEach(bindCheckbox);
+            // Mists: stable passive defaults enabled; debug IDs remain opt-in.
+            const mistDefaultOn = ["settingMistSolo", "settingMistDuo", "settingMistE0", "settingMistE1", "settingMistE2", "settingMistE3", "settingMistE4", "settingCage", "settingWispSpawn", "settingShowKnightfallAbbey"];
+            mistDefaultOn.forEach(id => {
+                if (settingsSync.get(id) === null) settingsSync.setBool(id, true);
+            });
+            if (settingsSync.get("settingWispSpawnDebugID") === null) settingsSync.setBool("settingWispSpawnDebugID", false);
+            [...mistDefaultOn, "settingWispSpawnDebugID"].forEach(bindCheckbox);
 
             // Dungeons
             ["settingDungeonSolo", "settingDungeonDuo", "settingDungeonE0", "settingDungeonE1", "settingDungeonE2", "settingDungeonE3", "settingDungeonE4", "settingDungeonCorrupted", "settingDungeonHellgate"].forEach(bindCheckbox);

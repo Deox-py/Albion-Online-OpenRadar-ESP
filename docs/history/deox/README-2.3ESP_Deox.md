@@ -79,3 +79,10 @@ Consulta `CHANGELOG-2.3ESP_Deox.md` para el detalle.
 ## Nota sobre QA de esta copia
 
 En el entorno donde se preparó esta rama se pudo ejecutar el QA estático completo. El gate de compilación y tests dependientes de Go 1.27 / Node 24 debe ejecutarse en un entorno que tenga esas versiones y las dependencias del proyecto instaladas antes de considerar una release final firmada.
+
+=== BUILDER INCREMENTAL V7.1 ===
+- El build normal comprueba antes de instalar/descargar.
+- MSYS2/MinGW y Npcap SDK se guardan en %LOCALAPPDATA%\OpenRadar-Deox\build-cache y se reutilizan entre versiones.
+- node_modules se reutiliza mientras package-lock.json no cambie; entre carpetas nuevas npm usa cache compartida y modo preferentemente offline.
+- Los modulos Go se reutilizan mientras go.mod/go.sum no cambien.
+- Usa COMPILAR-LIMPIO.bat solo si necesitas borrar caches y reconstruir todo desde cero.

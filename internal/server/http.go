@@ -208,7 +208,11 @@ func (s *HTTPServer) setupRoutes() {
 	}
 
 	for route, page := range pageRoutes {
-		s.mux.HandleFunc(route, func(w http.ResponseWriter, r *http.Request) {
+		pattern := route
+		if route == "/" {
+			pattern = "/{$}"
+		}
+		s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			s.renderPage(w, r, page)
 		})
 	}

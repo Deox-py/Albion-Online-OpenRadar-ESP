@@ -94,6 +94,9 @@ linters:
 
     misspell:
       locale: US
+      ignore-rules:
+        - clientes # Spanish dashboard label
+        - alternar # Spanish dashboard command
 
   exclusions:
     # Use standard presets

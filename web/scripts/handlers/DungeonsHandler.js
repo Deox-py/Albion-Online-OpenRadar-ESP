@@ -77,30 +77,42 @@ export class DungeonsHandler
 
         window.logger?.debug(CATEGORIES.DUNGEONS, 'new_dungeon_all_params', {
             dungeonId: parameters[0],
-            position: parameters[7],
+            position: parameters[1],
             allParameters: allParams,
             parameterCount: Object.keys(parameters).length
         });
 
         const id = parameters[0];
-        const position = parameters[1];
-        // Knightfall moved the Mist portal name from [3] to [15]; Dragonfire shifted it to [16].
-        const name = parameters[3] || parameters[16] || '';
-        // Parameters[9] is the enchant (0-4) since Dragonfire; Parameters[7] is a type/variant id.
-        const enchant = parameters[9] ?? 0;
-
-        this.addDungeon(id, position[0], position[1], name, enchant);
-    }
-
-    addDungeon(id, posX, posY, name, enchant) {
-        const existing = this.dungeonList.find(item => item.id === id);
-        if (existing) {
-            existing.touch();
+        const rawPosition = parameters[1];
+        const position = rawPosition?.data ?? rawPosition;
+        if (!Array.isArray(position) || position.length < 2 ||
+            !Number.isFinite(Number(position[0])) || !Number.isFinite(Number(position[1]))) {
+            window.logger?.debug(CATEGORIES.DUNGEONS, 'Dungeon_InvalidLocation', {id, rawPosition});
             return;
         }
 
-        const upperCaseName = name.toUpperCase();
-        const lowerCaseName = name.toLowerCase();
+        // Standard dungeons still use Parameters[3]. Newer Mist/Knightfall layouts
+        // can leave [3] empty and provide the portal tag in [16] (or [15] on an
+        // intermediate layout). Never let a populated fallback override [3].
+        const legacyName = typeof parameters[3] === 'string' ? parameters[3].trim() : '';
+        const dragonfireName = typeof parameters[16] === 'string' ? parameters[16].trim() : '';
+        const knightfallName = typeof parameters[15] === 'string' ? parameters[15].trim() : '';
+        const name = legacyName || dragonfireName || knightfallName;
+        const rawEnchant = Number(parameters[9] ?? 0);
+        const enchant = Number.isFinite(rawEnchant) ? Math.max(0, Math.min(4, Math.trunc(rawEnchant))) : 0;
+
+        this.addDungeon(id, Number(position[0]), Number(position[1]), name, enchant);
+    }
+
+    addDungeon(id, posX, posY, name, enchant) {
+        if (!Number.isFinite(Number(posX)) || !Number.isFinite(Number(posY))) return;
+        const safeName = typeof name === 'string' ? name : '';
+        const normalizedEnchant = Number.isFinite(Number(enchant))
+            ? Math.max(0, Math.min(4, Math.trunc(Number(enchant))))
+            : 0;
+
+        const upperCaseName = safeName.toUpperCase();
+        const lowerCaseName = safeName.toLowerCase();
         // eslint-disable-next-line no-useless-assignment
         let dungeonType = undefined;
 
@@ -110,10 +122,10 @@ export class DungeonsHandler
             const isSolo = upperCaseName.includes("_SOLO_");
 
             if (isSolo) {
-                if (!settingsSync.getBool("settingMistSolo") || !settingsSync.getBool("settingMistE" + enchant)) return;
+                if (!settingsSync.getBool("settingMistSolo", true) || !settingsSync.getBool("settingMistE" + normalizedEnchant, true)) return;
                 dungeonType = DungeonType.Solo;
             } else {
-                if (!settingsSync.getBool("settingMistDuo") || !settingsSync.getBool("settingMistE" + enchant)) return;
+                if (!settingsSync.getBool("settingMistDuo", true) || !settingsSync.getBool("settingMistE" + normalizedEnchant, true)) return;
                 dungeonType = DungeonType.Group;
             }
         }
@@ -130,7 +142,7 @@ export class DungeonsHandler
         else if (lowerCaseName.includes("solo")) // solo
         {
             // Test if solo checkbox
-            if (!settingsSync.getBool("settingDungeonSolo") || !settingsSync.getBool('settingDungeonE'+enchant)) return;
+            if (!settingsSync.getBool("settingDungeonSolo") || !settingsSync.getBool('settingDungeonE'+normalizedEnchant)) return;
 
             dungeonType = DungeonType.Solo;
         }
@@ -144,11 +156,23 @@ export class DungeonsHandler
         }
         else // group
         {
-            if (!settingsSync.getBool('settingDungeonDuo') || !settingsSync.getBool('settingDungeonE'+enchant)) return;
+            if (!settingsSync.getBool('settingDungeonDuo') || !settingsSync.getBool('settingDungeonE'+normalizedEnchant)) return;
             dungeonType = DungeonType.Group;
         }
 
-        const d = new Dungeon(id, posX, posY, name, dungeonType, enchant);
+        const existing = this.dungeonList.find(item => item.id === id);
+        if (existing) {
+            existing.posX = Number(posX);
+            existing.posY = Number(posY);
+            existing.name = safeName;
+            existing.type = dungeonType;
+            existing.enchant = normalizedEnchant;
+            existing.setDrawNameByType();
+            existing.touch();
+            return;
+        }
+
+        const d = new Dungeon(id, Number(posX), Number(posY), safeName, dungeonType, normalizedEnchant);
         this.dungeonList.push(d);
     }
 
