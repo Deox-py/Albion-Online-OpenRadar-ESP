@@ -101,6 +101,32 @@ Una medición adicional confirmó que los parámetros 16 y 17 de los 76 y 92 `Ne
 
 El siguiente experimento se centra en una sesión nueva del juego, capturada desde antes de entrar al personaje, para observar el intercambio y la sincronización de clave. No se añade un modo replay al radar. Cualquier resultado debe contrastarse con posiciones conocidas y nuevos movimientos antes de habilitar marcadores. Si el evento necesario sigue dentro de un mensaje Photon cifrado, reconocer XOR no elimina la necesidad de resolver su envoltura y obtener la clave de esa sesión.
 
+## Captura de inicio y movimiento en vivo
+
+Se realizó una captura nueva mientras el usuario abría el juego, pasaba por selección de personaje, entraba y se movía. `dumpcap` terminó normalmente con 14361 paquetes y cero pérdidas notificadas por la interfaz y el capturador; el lector tampoco encontró registros recortados. Esas cifras no garantizan ausencia de pérdidas fuera del punto de captura. El archivo privado tiene SHA-256 `BC479935BE5B98348B5D44C266C7A24BB70CF3ECFC582099F48F862B38B6E3E5` y permanece fuera de Git.
+
+| Medición de esta sesión | Resultado |
+| --- | --- |
+| Datagramas UDP 5055 / 5056 | 4423 / 9938 |
+| Eventos legibles / requests / responses | 14846 / 1712 / 93 |
+| `NewCharacter` / `Move` legibles, todos en 5056 | 231 / 11440 |
+| Mensajes marcados como cifrados en 5055 / 5056 | 582 / 61 |
+| Tipos cifrados `0x82` / `0x83` / `0x84` | 143 / 1 / 500 |
+| Solicitudes internas de intercambio sin fragmentar / respuestas de operación 0 | 6 / 6 |
+| Responses de operación 0 con array de 96 bytes | 6 |
+| Eventos `KeySync` 603 decodificados | 0 |
+| Posiciones reales descifradas y verificadas | 0 |
+
+Los 231 `NewCharacter` mantienen arrays de ocho bytes en los parámetros 16 y 17. Capturar únicamente 5056 conserva los movimientos observados, pero excluye el tráfico inicial de 5055; por eso la investigación de conexión incluyó ambos puertos. No se debe confundir el puerto del inicio con el de los eventos de movimiento.
+
+La inspección estática adicional del proveedor `Photon3Unity3D/g8i` identifica generación mediante `RNGCryptoServiceProvider`, operaciones `BigInteger.ModPow`, un hash `SHA256Managed` y configuración de `RijndaelManaged`. Esto respalda una ruta de intercambio Diffie-Hellman y derivación de clave en el cliente instalado. No demuestra por sí solo qué proveedor o modo exacto se seleccionó para cada conexión capturada. Los arrays públicos del intercambio no son la clave XOR de posiciones ni bastan para reconstruir el secreto privado de esa ruta.
+
+También se contrastaron los IDs propios recibidos en cinco respuestas `Join` con los eventos posteriores de aparición y movimiento dentro de su flujo/peer/challenge: no se encontraron coincidencias. Por tanto, esta comprobación no proporcionó un par de posición propia legible y posición propia protegida con el que verificar una clave XOR.
+
+El análisis completo se repitió y produjo agregados idénticos. Hay además 27 errores de encuadre del patrón `0x2d` y nueve errores de deserialización; ausencia de un `KeySync` decodificado no prueba que el servidor no lo haya enviado. No se identifica un evento concreto dentro de los mensajes cifrados ni se atribuyen todos los errores al cifrado.
+
+El resultado de la prueba en vivo es una captura de inicio utilizable y la localización más precisa del bloqueo: la clave de posiciones sigue sin recuperarse. Reconocer XOR no equivale a obtener su clave. Antes de habilitar jugadores es necesario obtener una clave válida por una vía comprobable o verificar un método de recuperación con posiciones conocidas; las hipótesis sobre el contenido de mensajes protegidos siguen pendientes. No se añade replay, no se habilitan coordenadas estimadas y no se entrega un EXE anunciado como descifrador.
+
 ## Comprobación de proyectos en GitHub
 
 | Fuente inspeccionada | Resultado |
