@@ -2,7 +2,7 @@
 
 El aviso `Encrypted traffic seen` confirma que OpenRadar reconoció una marca de cifrado; no identifica jugadores, coordenadas ni el algoritmo negociado. Las dos capturas proporcionadas contienen mensajes Photon legibles junto con mensajes marcados como cifrados. No se ha recuperado ni validado una posición de otro jugador.
 
-Se revisó la rama `release/radar-v7.3.2`, partiendo de `f26b1ed9f6c1ce8bfadbd916d61a1ac016e8d1ae`, y fuentes públicas fijadas a commits. Se analizaron las capturas localmente, sin ejecutables de terceros, sin modificar el juego y sin enviar los PCAPNG a GitHub. Este informe publica únicamente estadísticas y formatos de parámetros; los archivos, direcciones, identidades y valores brutos permanecen fuera del repositorio.
+Se revisó la rama `release/radar-v7.3.2`, partiendo de `f26b1ed9f6c1ce8bfadbd916d61a1ac016e8d1ae`, y fuentes públicas fijadas a commits. El análisis inicial de las capturas utilizó el parser del proyecto. La investigación posterior del cliente instalado utilizó Cpp2IL y una emulación con datos sintéticos, descritas más abajo. No se modificó el juego ni se enviaron los PCAPNG a GitHub. Este informe publica estadísticas y conclusiones técnicas; los archivos privados, direcciones, identidades, claves y valores brutos permanecen fuera del repositorio.
 
 ## Qué mecanismos están documentados
 
@@ -80,6 +80,27 @@ El umbral 10000 es una clasificación descriptiva, no un límite oficial del map
 
 En los 76 y 92 eventos `NewCharacter`, el parámetro 12 se decodifica como entero y el 13 como string. Por tanto, ejemplos antiguos que usan directamente uno de esos parámetros como array de coordenadas no encajan con estas muestras.
 
+## Investigación del cliente instalado: XOR confirmado, clave pendiente
+
+Se inspeccionaron los archivos de la instalación local `albiononline-win32-full-1.32.020.344269`, Unity `6000.3.12f1`, IL2CPP metadata versión 39. Se utilizó la compilación oficial de desarrollo de [Cpp2IL](https://github.com/SamboyCoding/Cpp2IL/tree/b5ad444b82267cb1e4b88b8b373c008105bdea52), conservada sólo en la carpeta local de investigación. Los binarios, metadatos y estructuras recuperadas del cliente no se publican.
+
+| Archivo analizado | SHA-256 |
+| --- | --- |
+| `GameAssembly.dll` | `591BF7D629EADA8F1D272C3A5468D1019683EDC758F322951DCD852EC6AA13D3` |
+| `global-metadata.dat` | `2246890B1944F2FB458273C99BE28B560FE424A97C784798AFC9BA7ACA2029FD` |
+
+La lectura de instrucciones nativas identifica una rutina que aplica XOR byte a byte y reconstruye un float32 little-endian. El lector de movimiento `Albion.PhotonClient/c3d` obtiene el ID del parámetro 0 y el blob del parámetro 1; lee ocho bytes de timestamp después del byte de modo. Para la posición usa los offsets 9 y 13, con desplazamientos de clave 0 y 4. También existe una ruta sin clave, utilizada por otro consumidor del mismo lector. Estos símbolos ofuscados y sus direcciones corresponden sólo a la versión y hashes anteriores.
+
+La ruta de movimiento de jugadores `csf.aft` pasa al lector el array almacenado en `ci5.cg`. Se identificó una rutina `ci5.c7` que guarda en ese campo un array recibido a través del deserializador de eventos. La clase marcada con código 603 tiene un campo `byte[]`, y el enum instalado confirma `KeySync = 603`. Falta observar esa sincronización en una sesión y confirmar su contenido, longitud y envoltura Photon. No se ha obtenido la clave real a partir de estos archivos.
+
+Para verificar el algoritmo sin ejecutar ni conectar el cliente, se emularon las instrucciones de su lector de floats con entradas completamente sintéticas: 12 casos aprobaron una comparación exacta de bits y el avance de cuatro bytes del índice. Incluyen claves de 8 y 7 bytes, desplazamientos 0 y 4, valores positivos, negativos y ceros con signo. Esto demuestra el comportamiento de esa rutina; no demuestra descifrado de jugadores de las capturas. El lector admite un array de clave y accesos cíclicos: no debe inferirse una longitud obligatoria de ocho bytes únicamente de su firma.
+
+Se encontró además un serializador común `n3` que incorpora un ID variable dentro del blob. Se contrastó ese formato con los movimientos asociados a jugadores de las dos capturas: ninguno de los 618 y 6254 IDs reconstruidos coincidió con el ID externo observado. Por tanto, se descartó esa hipótesis para estas muestras y no se cambiaron los offsets del radar por ella.
+
+Una medición adicional confirmó que los parámetros 16 y 17 de los 76 y 92 `NewCharacter` son arrays de ocho bytes. Su tamaño es compatible con dos floats protegidos, pero no revela los bytes de la clave ni valida las coordenadas por sí solo.
+
+El siguiente experimento se centra en una sesión nueva del juego, capturada desde antes de entrar al personaje, para observar el intercambio y la sincronización de clave. No se añade un modo replay al radar. Cualquier resultado debe contrastarse con posiciones conocidas y nuevos movimientos antes de habilitar marcadores. Si el evento necesario sigue dentro de un mensaje Photon cifrado, reconocer XOR no elimina la necesidad de resolver su envoltura y obtener la clave de esa sesión.
+
 ## Comprobación de proyectos en GitHub
 
 | Fuente inspeccionada | Resultado |
@@ -95,4 +116,4 @@ Esta actualización aporta el informe y avisos en las notas históricas. Mantien
 
 Se ejecutaron el replay agregado de ambos PCAPNG, `go test -count=1 ./internal/photon/...`, y `go test -race -count=1 ./internal/photon/...` después de configurar CGO con `tools/go-env.ps1`: aprobados. La primera invocación de race sin CGO no pudo ejecutarse; la ejecución configurada pasó. Las pruebas existentes de `PlayersHandler`, `PlayerListRenderer` y `EventRouter` aprobaron: 202 tests en tres archivos. No se recompiló porque sólo se editó documentación.
 
-Los resultados detallados y el script de investigación quedan localmente en `.build/qa/encryption-20261007/`, excluidos de Git. Los dos EXE seleccionados, V7.3.2 y V7.3.1-Old, conservan sus versiones y hashes verificados. Para determinar el modo exacto de una sesión hace falta evidencia de su negociación o implementación, y para habilitar posiciones hace falta un formato validado y una comparación independiente con posiciones conocidas. Este análisis no dispone de esas dos pruebas.
+Los resultados detallados del análisis inicial quedan localmente en `.build/qa/encryption-20261007/`, excluidos de Git. La investigación posterior del cliente y la verificación nativa quedan igualmente locales, sin subir software del juego ni capturas privadas. Los dos EXE seleccionados, V7.3.2 y V7.3.1-Old, conservan sus versiones y hashes verificados. Se confirmó la rutina XOR del cliente instalado con datos sintéticos; siguen pendientes la clave de una sesión, la envoltura Photon y una comparación independiente con posiciones reales conocidas.
