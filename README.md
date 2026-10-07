@@ -39,7 +39,7 @@ Con las herramientas ya preparadas puedes añadir `-NoInstall`:
 .\AUTO-BUILD-2.3ESP_Deox.ps1 -NoInstall -OutputDirectory 'dist/.staging/V7.3.2'
 ```
 
-`-NoInstall` no prepara las herramientas que falten; exige disponer de ellas en el sistema o en el caché. El builder genera un paquete técnico con launcher, ZIP del núcleo, notas y checksums. La organización de una entrega local deja en `dist/` sólo el EXE actual con versión y el anterior marcado `-Old`; el paquete técnico y los respaldos se conservan en `.build/`. Consulta [distribución Windows](docs/technical/WINDOWS_RELEASE.md) y las [reglas de entrega](AGENTS.md).
+`-NoInstall` no prepara las herramientas que falten; exige disponer de ellas en el sistema o en el caché. El builder genera un paquete técnico con launcher, ZIP del núcleo, notas y checksums. La organización de una entrega local deja en `dist/` sólo el EXE actual con versión y el anterior marcado `-Old`; el paquete técnico y los respaldos se conservan en `.build/`. Consulta [distribución Windows](docs/technical/WINDOWS_RELEASE.md) y las [reglas de entrega](CONTRIBUTING.md).
 
 Estas instrucciones parten de la raíz del repositorio y no necesitan otro árbol de fuentes. La presencia de las fuentes y los informes no implica que haya un binario o una release V7.3.2 publicados en GitHub.
 

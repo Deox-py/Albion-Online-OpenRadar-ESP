@@ -100,7 +100,7 @@ Para reproducir V7.3.2 utiliza la raíz de este repositorio. En la primera ejecu
 npm.cmd run qa:browser
 ```
 
-Puede añadirse `-NoInstall` cuando Go, Node, MinGW y Npcap SDK ya estén disponibles. Una vez verificado el paquete, organizar la entrega local conforme a [AGENTS.md](../../AGENTS.md): EXE actual con versión y anterior Old, conservando los auxiliares y respaldos en `.build/`. Para volver a ejecutar toda la validación, consulta el [README](../../README.md#verificar-en-windows).
+Puede añadirse `-NoInstall` cuando Go, Node, MinGW y Npcap SDK ya estén disponibles. Una vez verificado el paquete, organizar la entrega local conforme a [CONTRIBUTING.md](../../CONTRIBUTING.md): EXE actual con versión y anterior Old, conservando los auxiliares y respaldos en `.build/`. Para volver a ejecutar toda la validación, consulta el [README](../../README.md#verificar-en-windows).
 
 Los fixtures de clasificación del catálogo y las secuencias del reporte upstream son sintéticos o derivados de extractos, no capturas nuestras realizadas hoy. El fixture de campamento incluido conserva un código histórico 391; las pruebas de router utilizan el enum 393 de esta revisión. Eso prueba el comportamiento del software para esas entradas, sin acreditar compatibilidad con todos los mensajes de la versión actual de Albion.
 

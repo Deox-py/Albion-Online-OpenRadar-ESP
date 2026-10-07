@@ -2,7 +2,7 @@
 
 El aviso `Encrypted traffic seen` confirma que OpenRadar reconoció una marca de cifrado; no identifica jugadores, coordenadas ni el algoritmo negociado. Las dos capturas proporcionadas contienen mensajes Photon legibles junto con mensajes marcados como cifrados. No se ha recuperado ni validado una posición de otro jugador.
 
-Se revisó la rama `codex/radar-v7.3.2`, partiendo de `f26b1ed9f6c1ce8bfadbd916d61a1ac016e8d1ae`, y fuentes públicas fijadas a commits. Se analizaron las capturas localmente, sin ejecutables de terceros, sin modificar el juego y sin enviar los PCAPNG a GitHub. Este informe publica únicamente estadísticas y formatos de parámetros; los archivos, direcciones, identidades y valores brutos permanecen fuera del repositorio.
+Se revisó la rama `release/radar-v7.3.2`, partiendo de `f26b1ed9f6c1ce8bfadbd916d61a1ac016e8d1ae`, y fuentes públicas fijadas a commits. Se analizaron las capturas localmente, sin ejecutables de terceros, sin modificar el juego y sin enviar los PCAPNG a GitHub. Este informe publica únicamente estadísticas y formatos de parámetros; los archivos, direcciones, identidades y valores brutos permanecen fuera del repositorio.
 
 ## Qué mecanismos están documentados
 

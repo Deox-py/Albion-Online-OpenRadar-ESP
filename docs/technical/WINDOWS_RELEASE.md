@@ -32,7 +32,7 @@ El builder produce estos archivos intermedios en el directorio de salida:
 
 Npcap es una dependencia externa para ejecutar ambos formatos. El SDK de compilación no instala el driver. El launcher ofrece descargar e iniciar el instalador oficial con confirmación si Npcap falta; el ZIP directo requiere tenerlo instalado. No se redistribuye su instalador.
 
-Después de verificar el paquete provisional, conservarlo y guardar sus evidencias bajo `.build/`. La entrega local organizada según [AGENTS.md](../../AGENTS.md) deja en `dist/` únicamente:
+Después de verificar el paquete provisional, conservarlo y guardar sus evidencias bajo `.build/`. La entrega local organizada según [CONTRIBUTING.md](../../CONTRIBUTING.md) deja en `dist/` únicamente:
 
 ```text
 OpenRadar-2.3ESP_Deox-V7.3.2.exe

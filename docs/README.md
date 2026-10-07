@@ -11,7 +11,7 @@ Estas fuentes corresponden al radar en español V7.3.2, sin automatización. Los
 | [Distribución Windows](technical/WINDOWS_RELEASE.md) | Salida provisional, hashes, metadatos y firma opcional |
 | [Informe V7.3.2](releases/INFORME-V7.3.2-COFRES.md) | Cofres, filtros neutros, estado bruto, cifrado y validación histórica |
 | [Integración GitHub V7.3.2](releases/INTEGRACION-GITHUB-V7.3.2.md) | Organización pública, CI y verificaciones de este árbol de fuentes |
-| [Reglas de entrega](../AGENTS.md) | Alcance del radar y organización local de dos EXE |
+| [Reglas de entrega](../CONTRIBUTING.md) | Alcance del radar y organización local de dos EXE |
 
 ## Referencias técnicas
 
