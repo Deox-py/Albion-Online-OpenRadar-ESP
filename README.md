@@ -16,6 +16,8 @@ Recursos estáticos y vivos, mobs, pesca, mazmorras, Mists, jaulas, cofres y una
 
 El radar sólo conoce entidades que el servidor haya anunciado y que la captura pueda interpretar. No revela cofres aún no anunciados ni acredita rareza oculta. Los mensajes cifrados se reconocen y se omiten: sin claves válidas no se interpretan como posiciones. Las posiciones exactas de otros jugadores no se dibujan.
 
+La [revisión de cifrado del 7 de octubre de 2026](docs/technical/PLAYER_POSITION_ENCRYPTION_AUDIT_2026-10-07.md) distingue los modos documentados de Photon de lo observado en dos capturas, explica el contador `Encrypted traffic seen` y analiza los errores de longitud. No acredita un descifrador de posiciones.
+
 Cuando se pierde la conexión o se saturan las colas, se descarta el estado incompleto y se muestra un aviso. Las entidades persistentes pueden necesitar un cambio de zona para volver a anunciarse; la captura pasiva no solicita al juego una instantánea.
 
 ## Compilar en Windows

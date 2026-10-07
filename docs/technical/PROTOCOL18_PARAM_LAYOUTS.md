@@ -1,5 +1,7 @@
 # Protocol18 Event Parameter Layouts (observed)
 
+> Audit note, 2026-10-07: the observations below are historical. A finite float is not evidence of decrypted coordinates, and raw Move modes may use different layouts. Two newly supplied captures include player-associated modes 0, 1, 3, 5 and 7; the current parser only checks length and finiteness when reading offsets 9/13. See the [current audit](PLAYER_POSITION_ENCRYPTION_AUDIT_2026-10-07.md) before treating these offsets or encryption claims as current-session guarantees.
+
 Status: snapshot from a single live capture (T5 zone + harvest + zone transit,
 ~130s, 3020 packets, 4954 events decoded), taken before the 2026-06-29 patch.
 Parameter shapes below still hold. The event codes do not: that patch inserted

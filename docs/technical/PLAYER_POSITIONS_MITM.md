@@ -1,5 +1,7 @@
 # Player positions and the MITM constraint
 
+> Audit note, 2026-10-07: this is a historical explanation, not a verified description of every current Albion session. The claim below that all UDP 5056 traffic is AES-encrypted is too broad: the supplied captures contain readable Photon messages alongside flagged encrypted messages. Exact AES/IV/DH/XOR settings and the proxy requirement were not independently established for those sessions. See the [current encryption and player-position audit](PLAYER_POSITION_ENCRYPTION_AUDIT_2026-10-07.md) for evidence, limitations and public source checks. Historical details below are retained for traceability.
+
 Why OpenRadar cannot place other players' live positions on the radar without a Photon MITM proxy.
 
 *Last verified against code: 2026-08-14.*
