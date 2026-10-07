@@ -175,6 +175,32 @@ La vía encontrada no requiere un segundo PC y no descifra el cifrado de Photon:
 
 El resultado acredita recuperación en ventanas concretas y exige ampliar la prueba de movimiento: de las 83 comprobaciones de la política final, nueve son de `Move`. Aún no se han contrastado marcadores con la ubicación visible de jugadores en el juego. Una versión que dibuje posiciones necesita corroborar cada máscara con pares independientes, retirarla ante cambios o pérdida de confianza y disponer de validación continua de movimientos. La entrega V7.3.2 no incorpora todavía este aprendizaje ni un descifrador operativo.
 
+## Diagnóstico temporal en directo y prueba con un jugador observado
+
+Se preparó un diagnóstico privado que recibe PCAPNG por stdin mientras `dumpcap` captura. Un tee binario conserva los paquetes localmente y alimenta al parser durante la partida; imprime sólo contadores. La regresión compara el procesamiento por archivo y por flujo de la captura de inicio y obtiene los mismos contadores. También se verifican el registro de comandos malformados y el requisito de que una corroboración utilice una posición distinta en un datagrama posterior. Las tres pruebas aprobaron. Los errores de parser suspenden y eliminan los candidatos del flujo afectado.
+
+Se realizaron dos pruebas acotadas adicionales, de tres y dos minutos, con cero pérdidas registradas por `dumpcap`. El usuario indicó que sólo estaba con un jugador desconocido y que éste no podía colaborar; no fue una prueba controlada de desplazamientos conocidos.
+
+| Medida | Prueba de tres minutos | Prueba de dos minutos |
+| --- | ---: | ---: |
+| Registros capturados | 3720 | 2395 |
+| Eventos de aparición observados | 2 | 1 |
+| Movimientos de entidades previamente observadas como jugador | 254 | 141 |
+| Hechizos dirigidos al mismo emisor | 19 | 6 |
+| Pares candidatos dentro de diez segundos | 12 | 6 |
+| Semillas de la política original, sólo en el mismo datagrama | 4 | 0 |
+| Comparaciones posteriores de la política original | 0 | 0 |
+
+SHA-256 de las capturas privadas: `BAE43EF225A568A72EB9948ADA9C718A5AF171A412ECB663089842B4EAD6221F` y `EED4226F5F70A9602EF71CBCA788A327EE17AEB613F0485DCFB4AAE2FAE01FF3`. En la primera prueba las cuatro semillas se invalidaron ante eventos cifrados antes de recibir otro par elegible. La cantidad de jugadores no explica por sí sola ese resultado: también limitaron la prueba la antigüedad de las observaciones y la política de invalidación.
+
+Se estudió una variante más flexible, separada del radar y de la política de 83 comparaciones descrita arriba. Admite observaciones de hasta dos segundos para **proponer candidatos sin confianza**. Conserva el candidato al recibir un evento cifrado, pero suspende inmediatamente todo uso provisional de su máscara. Ante una referencia legible posterior, compara primero sus bytes con la máscara anterior. Sólo vuelve a admitir un uso provisional después de una coincidencia exacta en una posición diferente y un datagrama posterior al de aprendizaje. Esa corroboración puede proceder del mismo jugador. Una discrepancia elimina la máscara; los errores de parser también eliminan los candidatos del flujo. El uso provisional expira a los cinco segundos de la última corroboración.
+
+En la primera captura esta variante produjo **seis comparaciones posteriores exactas de movimiento y cinco discrepancias**, que rechazó; en la segunda obtuvo una discrepancia y ninguna coincidencia. Las seis coincidencias pertenecen al mismo ID que aportó la semilla de su candidato. Se verificaron sus instrucciones de lectura con los fixtures privados: **doce float32 coincidieron bit a bit con la rutina nativa del cliente**. Este resultado acredita comparaciones de protocolo, no ubicación visual del jugador. Se produjo al analizar la captura recién obtenida con la política adaptada; esa variante todavía no se ha validado en una nueva sesión en directo.
+
+La primera muestra permite dos ventanas corroboradas por posiciones distintas del mismo jugador; la mayor duró 2935 ms. Durante esas ventanas se realizaron 14 operaciones provisionales sobre movimientos. Esas 14 posiciones no cuentan como verificadas: no tienen una comparación independiente por evento ni una validación visual. No se observó una discrepancia de referencia mientras una ventana estaba corroborada, pero la muestra es demasiado pequeña para acreditar seguimiento continuo. Las cifras de esta variante no se suman a las 83 comprobaciones de la política original ni se presentan como una política con cero fallos.
+
+La entrega V7.3.2 mantiene su comportamiento. Los diagnósticos, ejecutables temporales, máscaras, PCAPNG y fixtures permanecen en `.build/`. No se publica una versión que dibuje jugadores ni se afirma haber recuperado la clave AES o el array original de `KeySync`.
+
 ## Comprobación de proyectos en GitHub
 
 | Fuente inspeccionada | Resultado |
