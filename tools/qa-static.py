@@ -65,6 +65,8 @@ def check_go_format() -> None:
     else:
         for p in ROOT.rglob("*.go"):
             rel = p.relative_to(ROOT).as_posix()
+            if rel.startswith(("node_modules/", ".build/", "dist/")):
+                continue
             if rel.startswith("internal/photon/eventcodes/") or rel.startswith("internal/photon/operationcodes/"):
                 continue
             go_files.append(rel)
@@ -201,6 +203,59 @@ def check_required_files() -> None:
             fail(f"Falta archivo esperado: {rel}")
 
 
+
+def check_incremental_builder_contract() -> None:
+    ps = (ROOT / "AUTO-BUILD-2.3ESP_Deox.ps1").read_text(encoding="utf-8")
+    required = [
+        "%LOCALAPPDATA%" if False else "OpenRadar-Deox\\build-cache",
+        "$NpmCacheDir",
+        "--prefer-offline",
+        "--no-audit",
+        "--fund=false",
+        "frontend-lock.sha256",
+        "go-modules.sha256",
+        "MinGW-w64 OK (cache)",
+        "Npcap SDK OK",
+        "[switch]$Clean",
+    ]
+    for marker in required:
+        if marker not in ps:
+            fail(f"Builder incremental incompleto: falta {marker!r}")
+
+    if "Remove-Item $BuildDir -Recurse" in ps or "        $BuildDir,\n        $SharedCacheRoot" in ps:
+        fail("Builder -Clean intenta borrar .build completo durante un transcript activo")
+
+    smoke_pos = ps.find("Smoke funcional offline V7.1")
+    mingw_pos = ps.find("$gcc = Ensure-Mingw")
+    if smoke_pos < 0 or mingw_pos < 0 or smoke_pos > mingw_pos:
+        fail("El smoke offline debe ejecutarse antes de preparar MSYS2/MinGW")
+
+    dungeons = (ROOT / "web/scripts/handlers/DungeonsHandler.js").read_text(encoding="utf-8")
+    priority = "const name = legacyName || dragonfireName || knightfallName;"
+    if priority not in dungeons:
+        fail("DungeonsHandler no conserva Parameters[3] como prioridad antes de fallbacks Mist")
+
+    # V7.1.1 regression guard: GCC must receive the MinGW runtime PATH before
+    # being probed, and the probe must compile/link real C code (not only --version).
+    add_path_pos = ps.find("Add-MingwPath $localMsysRoot")
+    cached_probe_pos = ps.find("Test-MingwCompiler $localMsysRoot $localGcc")
+    if add_path_pos < 0 or cached_probe_pos < 0 or add_path_pos > cached_probe_pos:
+        fail("Builder vuelve a probar GCC antes de exponer mingw64/bin en PATH")
+    for marker in ["function Test-MingwCompiler", "probe.c", "int main(void){return 0;}", "mingw-w64-x86_64-gcc-libs"]:
+        if marker not in ps:
+            fail(f"Falta guardia V7.1.1 del toolchain MinGW: {marker}")
+
+    # V7.1.2 regression guard: the .mjs smoke harness is linted as a mixed
+    # Node/browser environment, otherwise ESLint no-undef rejects the mocks.
+    eslint_cfg = (ROOT / "eslint.config.mjs").read_text(encoding="utf-8")
+    for marker in ['tools/**/*.{js,mjs}', 'tools/qa-v7-smoke.mjs', '...globals.node', '...globals.browser']:
+        if marker not in eslint_cfg:
+            fail(f"ESLint smoke harness incompleto: falta {marker!r}")
+
+    clean_bat = ROOT / "COMPILAR-LIMPIO.bat"
+    if not clean_bat.exists() or "-Clean" not in clean_bat.read_text(encoding="utf-8", errors="ignore"):
+        fail("Falta COMPILAR-LIMPIO.bat funcional con -Clean")
+
 def main() -> int:
     checks = [
         check_branding,
@@ -214,6 +269,7 @@ def main() -> int:
         check_common_untranslated_ui,
         check_portable_release,
         check_required_files,
+        check_incremental_builder_contract,
     ]
     for check in checks:
         try:

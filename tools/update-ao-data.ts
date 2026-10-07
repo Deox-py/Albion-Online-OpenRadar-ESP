@@ -1,9 +1,22 @@
-import fs from 'fs';
 import path from 'path';
+import {pathToFileURL} from 'node:url';
 import {downloadFile, DownloadStatus} from "./common";
+import {createManifest, DEFAULT_DATA_REF, publishCatalog, resolveDataRef, sourceBase} from './data-provenance';
 
-const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/ao-data/ao-bin-dumps/refs/heads/master';
 const OUTPUT_DIR = 'web/ao-bin-dumps';
+
+interface UpdateContext {
+    base: string;
+    download: typeof downloadFile;
+    sources: Record<string, Buffer>;
+    outputs: Record<string, Buffer>;
+}
+
+async function downloadSource(ctx: UpdateContext, filename: string) {
+    const result = await ctx.download(`${ctx.base}/${filename}`);
+    if (result.status === DownloadStatus.SUCCESS && result.buffer) ctx.sources[filename] = Buffer.from(result.buffer);
+    return result;
+}
 
 // Zone types and their PvP classification
 type PvpType = 'safe' | 'yellow' | 'red' | 'black';
@@ -85,7 +98,7 @@ type MinifiedHarvestables = Record<string, HarvestableTier[]>;
  * items.txt is the canonical source of (numericId, uniqueName) pairs.
  * items.json only supplies metadata for a uniqueName.
  */
-async function buildItemsArray(itemsJsonRaw: any): Promise<(MinifiedItem | null)[]> {
+async function buildItemsArray(itemsJsonRaw: any, ctx: UpdateContext): Promise<(MinifiedItem | null)[]> {
     const metaByName = new Map<string, {itempower: number, type: string, cat?: string, slot?: string, h2?: boolean}>();
     const itemsRoot = itemsJsonRaw?.items;
 
@@ -133,9 +146,8 @@ async function buildItemsArray(itemsJsonRaw: any): Promise<(MinifiedItem | null)
         }
     }
 
-    const itemsTxtUrl = `${GITHUB_RAW_BASE}/formatted/items.txt`;
     console.log(`📥 Downloading items.txt for canonical IDs...`);
-    const txtRes = await downloadFile(itemsTxtUrl);
+    const txtRes = await downloadSource(ctx, 'formatted/items.txt');
     if (txtRes.status !== DownloadStatus.SUCCESS || !txtRes.buffer) {
         throw new Error(`Failed to download items.txt: ${txtRes.message}`);
     }
@@ -347,13 +359,10 @@ function extractTier(file: string): number {
     return tierMatch ? parseInt(tierMatch[1], 10) : 0;
 }
 
-async function processWorldJson(): Promise<{ success: boolean, zonesCount: number }> {
-    const worldJsonUrl = `${GITHUB_RAW_BASE}/cluster/world.json`;
-    const outputPath = path.join(OUTPUT_DIR, 'zones.json');
-
+async function processWorldJson(ctx: UpdateContext): Promise<{ success: boolean, zonesCount: number }> {
     console.log('\n📍 Processing world.json for zone data...');
 
-    const res = await downloadFile(worldJsonUrl);
+    const res = await downloadSource(ctx, 'cluster/world.json');
     if (res.status !== DownloadStatus.SUCCESS || !res.buffer) {
         console.error(`❌ Failed to download world.json: ${res.message}`);
         return {success: false, zonesCount: 0};
@@ -406,8 +415,9 @@ async function processWorldJson(): Promise<{ success: boolean, zonesCount: numbe
             zones[id] = zone;
         }
 
-        fs.writeFileSync(outputPath, JSON.stringify(zones));
-        console.log(`💾 Generated zones.json with ${Object.keys(zones).length} zones`);
+        if (!Object.keys(zones).length) throw new Error('No zones in source');
+        ctx.outputs['zones.json'] = Buffer.from(JSON.stringify(zones));
+        console.log(`💾 Staged zones.json with ${Object.keys(zones).length} zones`);
 
         const pvpCounts = {safe: 0, yellow: 0, red: 0, black: 0};
         for (const zone of Object.values(zones)) {
@@ -435,16 +445,14 @@ interface ProcessResult {
 }
 
 async function downloadAndMinify<T>(
+    ctx: UpdateContext,
     filename: string,
     minifyFn: (data: any) => T,
     outputFilename: string
 ): Promise<ProcessResult> {
-    const url = `${GITHUB_RAW_BASE}/${filename}`;
-    const outputPath = path.join(OUTPUT_DIR, outputFilename);
-
     console.log(`\n📥 Downloading ${filename}...`);
 
-    const res = await downloadFile(url);
+    const res = await downloadSource(ctx, filename);
     if (res.status !== DownloadStatus.SUCCESS || !res.buffer) {
         console.error(`❌ Failed to download ${filename}: ${res.message}`);
         return {name: filename, success: false, originalSize: 0, minifiedSize: 0};
@@ -458,13 +466,14 @@ async function downloadAndMinify<T>(
         const minified = minifyFn(rawData);
 
         const minifiedJson = JSON.stringify(minified);
-        fs.writeFileSync(outputPath, minifiedJson);
 
         const minifiedSize = Buffer.byteLength(minifiedJson);
         const reduction = ((1 - minifiedSize / originalSize) * 100).toFixed(1);
         const count = Array.isArray(minified) ? minified.length : Object.keys(minified as object).length;
+        if (!count) throw new Error(`No catalog entries in ${filename}`);
+        ctx.outputs[outputFilename] = Buffer.from(minifiedJson);
 
-        console.log(`💾 Saved ${outputFilename} (${formatSize(minifiedSize)}, -${reduction}%, ${count} entries)`);
+        console.log(`💾 Staged ${outputFilename} (${formatSize(minifiedSize)}, -${reduction}%, ${count} entries)`);
 
         return {
             name: filename,
@@ -486,12 +495,9 @@ function formatSize(bytes: number): string {
 }
 
 
-async function downloadAndMinifyItems(): Promise<ProcessResult> {
-    const url = `${GITHUB_RAW_BASE}/items.json`;
-    const outputPath = path.join(OUTPUT_DIR, 'items.min.json');
-
+async function downloadAndMinifyItems(ctx: UpdateContext): Promise<ProcessResult> {
     console.log(`\n📥 Downloading items.json...`);
-    const res = await downloadFile(url);
+    const res = await downloadSource(ctx, 'items.json');
     if (res.status !== DownloadStatus.SUCCESS || !res.buffer) {
         console.error(`❌ Failed to download items.json: ${res.message}`);
         return {name: 'items.json', success: false, originalSize: 0, minifiedSize: 0};
@@ -501,16 +507,17 @@ async function downloadAndMinifyItems(): Promise<ProcessResult> {
 
     try {
         const rawData = JSON.parse(res.buffer.toString('utf-8'));
-        const minified = await buildItemsArray(rawData);
+        const minified = await buildItemsArray(rawData, ctx);
 
         const minifiedJson = JSON.stringify(minified);
-        fs.writeFileSync(outputPath, minifiedJson);
 
         const minifiedSize = Buffer.byteLength(minifiedJson);
         const reduction = ((1 - minifiedSize / originalSize) * 100).toFixed(1);
         const nonNullCount = minified.filter(x => x !== null).length;
+        if (!nonNullCount) throw new Error('No canonical item IDs in source');
+        ctx.outputs['items.min.json'] = Buffer.from(minifiedJson);
 
-        console.log(`💾 Saved items.min.json (${formatSize(minifiedSize)}, -${reduction}%, ${nonNullCount} non-null / ${minified.length} total slots)`);
+        console.log(`💾 Staged items.min.json (${formatSize(minifiedSize)}, -${reduction}%, ${nonNullCount} non-null / ${minified.length} total slots)`);
 
         return {
             name: 'items.json',
@@ -525,27 +532,28 @@ async function downloadAndMinifyItems(): Promise<ProcessResult> {
     }
 }
 
-async function main() {
+export async function updateCatalogs(options: {ref?: string; outputDir?: string; download?: typeof downloadFile} = {}): Promise<void> {
+    const ref = options.ref ?? DEFAULT_DATA_REF;
+    const ctx: UpdateContext = {base: sourceBase(ref), download: options.download ?? downloadFile, sources: {}, outputs: {}};
+    const outputDir = options.outputDir ?? OUTPUT_DIR;
     console.log('Albion Online Data Updater');
     console.log('==========================');
     console.log('Downloading and minifying game data...\n');
 
-    if (!fs.existsSync(OUTPUT_DIR)) {
-        fs.mkdirSync(OUTPUT_DIR, {recursive: true});
-        console.log(`✅ Created directory: ${OUTPUT_DIR}\n`);
-    }
+    console.log(`Pinned source revision: ${ref}`);
+    console.log('Files are staged in memory; catalogs and source-manifest.json are published only after all sources succeed.');
 
     const startTime = Date.now();
     const results: ProcessResult[] = [];
 
     // Process each data file with minification
-    results.push(await downloadAndMinifyItems());
-    results.push(await downloadAndMinify('mobs.json', minifyMobs, 'mobs.min.json'));
-    results.push(await downloadAndMinify('spells.json', minifySpells, 'spells.min.json'));
-    results.push(await downloadAndMinify('harvestables.json', minifyHarvestables, 'harvestables.min.json'));
+    results.push(await downloadAndMinifyItems(ctx));
+    results.push(await downloadAndMinify(ctx, 'mobs.json', minifyMobs, 'mobs.min.json'));
+    results.push(await downloadAndMinify(ctx, 'spells.json', minifySpells, 'spells.min.json'));
+    results.push(await downloadAndMinify(ctx, 'harvestables.json', minifyHarvestables, 'harvestables.min.json'));
 
     // Process zones
-    const zonesResult = await processWorldJson();
+    const zonesResult = await processWorldJson(ctx);
     results.push({
         name: 'world.json',
         success: zonesResult.success,
@@ -592,10 +600,16 @@ async function main() {
     console.log('\n💡 Note: localization.json and items.xml are fetched on-demand by icon download scripts');
     console.log('='.repeat(60) + '\n');
 
-    process.exit(failCount > 0 ? 1 : 0);
+    if (failCount > 0) throw new Error(`Catalog update aborted: ${failCount} source files failed; published files were preserved`);
+    publishCatalog(outputDir, ctx.outputs, createManifest(ref, ctx.sources, ctx.outputs));
+    console.log(`Published catalogs and source-manifest.json to ${outputDir}`);
 }
 
-main().catch(err => {
+async function main(): Promise<void> {
+    await updateCatalogs({ref: resolveDataRef(process.argv.slice(2))});
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) main().catch(err => {
     console.error('❌ Fatal error:', err);
-    process.exit(1);
+    process.exitCode = 1;
 });

@@ -7,6 +7,8 @@ import {EventCodes} from '../utils/EventCodes.js';
 import {OperationCodes} from '../utils/OperationCodes.js';
 import {loadFixture, normalizeParams} from '../__fixtures__/loader.js';
 import zonesDatabase from '../data/ZonesDatabase.js';
+import {RadarRenderer} from '../utils/RadarRenderer.js';
+import {HarvestablesHandler} from '../handlers/HarvestablesHandler.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const zonesJsonPath = join(here, '..', '..', 'ao-bin-dumps', 'zones.json');
@@ -88,6 +90,141 @@ describe('EventRouter', () => {
         }
         return calls;
     }
+
+    describe('decoded local position lifecycle', () => {
+        let resources;
+        let renderer;
+
+        beforeEach(() => {
+            resources = new HarvestablesHandler();
+            renderer = new RadarRenderer({handlers: {harvestablesHandler: resources},
+                drawings: {harvestablesDrawing: {interpolate() {}}}, drawingUtils: {}});
+            EventRouter.setRadarRenderer(renderer);
+        });
+
+        test('manual known-zone identity preserves decoded coordinates and entities', () => {
+            EventRouter.onRequest({253: 22, 1: [333, -100]});
+            resources.addHarvestable(2338, 'Log', 6, 333, -100, 0, 9);
+            expect(typeof EventRouter.applyManualMapIdentity).toBe('function');
+            expect(EventRouter.applyManualMapIdentity('1000')).toBe(true);
+            expect(map.id).toBe('1000');
+            expect(EventRouter.getMapIdentity().source).toBe('manual');
+            expect(renderer.hasLocalPlayerPosition).toBe(true);
+            expect(EventRouter.getLocalPlayerPosition()).toEqual({x:333,y:-100});
+            expect(resources.harvestableList.map(resource => resource.id)).toEqual([2338]);
+        });
+
+        test('cached observed context preserves positions and the existing stream warning', () => {
+            EventRouter.onRequest({253: 22, 1: [333, -100]});
+            resources.addHarvestable(2338, 'Log', 6, 333, -100, 0, 9);
+            const status=document.createElement('div'); status.id='streamHealth'; status.textContent='Eventos perdidos'; document.body.append(status);
+            expect(typeof EventRouter.applyObservedMapContext).toBe('function');
+            expect(EventRouter.applyObservedMapContext({mapId:'1000',source:'join',observedAt:1234})).toBe(true);
+            expect(map.id).toBe('1000');
+            expect(EventRouter.getMapIdentity()).toMatchObject({source:'observed',observedAt:1234,bootstrap:true});
+            expect(renderer.hasLocalPlayerPosition).toBe(true);
+            expect(EventRouter.getLocalPlayerPosition()).toEqual({x:333,y:-100});
+            expect(resources.harvestableList).toHaveLength(1);
+            expect(status.textContent).toBe('Eventos perdidos');
+            status.remove();
+        });
+
+        test('observed map signal replaces manual provenance even for the same zone', () => {
+            expect(typeof EventRouter.applyManualMapIdentity).toBe('function');
+            EventRouter.applyManualMapIdentity('1000');
+            EventRouter.onResponse({253:41,0:'1000'},clearHandlers);
+            expect(EventRouter.getMapIdentity().source).toBe('observed');
+        });
+
+        test('an observed self522 signal confirms the same manual zone without discarding coordinates', () => {
+            EventRouter.onRequest({253:22,1:[333,-100]});
+            EventRouter.applyManualMapIdentity('1000');
+            EventRouter.onEvent({252:522,2:'1000',3:true});
+            expect(EventRouter.getMapIdentity().source).toBe('observed');
+            expect(renderer.hasLocalPlayerPosition).toBe(true);
+            expect(EventRouter.getLocalPlayerPosition()).toEqual({x:333,y:-100});
+        });
+
+        test('manual IDs must match an exact known zone and cannot invent dynamic instances', () => {
+            expect(typeof EventRouter.applyManualMapIdentity).toBe('function');
+            for(const id of ['@MISTS@invented','1000-123','missing','',-1]) expect(EventRouter.applyManualMapIdentity(id)).toBe(false);
+            expect(map.id).toBe(-1);
+        });
+
+        test('direct bootstrap API rejects malformed identity metadata', () => {
+            const good = {mapId: '1000', source: 'join', observedAt: 1234};
+            for (const bad of [{mapId:'-1'}, {mapId:' 1000'}, {mapId:'1000 '}, {mapId:''},
+                {observedAt:0}, {observedAt:1.5}, {observedAt:Infinity}, {originCluster:'-1'}, {mistLethal:'yes'}]) {
+                expect(EventRouter.applyObservedMapContext({...good, ...bad})).toBe(false);
+            }
+            expect(map.id).toBe(-1);
+        });
+
+        test('a manual zone cannot supply the origin of a newly observed Mist', () => {
+            EventRouter.applyManualMapIdentity('1000');
+            EventRouter.onResponse({253:2,8:'@MISTS@observed-without-origin',9:[1,2]},clearHandlers);
+            expect(zonesDatabase.overrides.has('@MISTS@observed-without-origin')).toBe(false);
+        });
+
+        test('cached explicit Mist metadata survives an observed Abbey chain', () => {
+            EventRouter.applyObservedMapContext({mapId:'@MISTSDUNGEON@bootstrap', source:'join', observedAt:Date.now(), originCluster:'5001', mistLethal:true});
+            EventRouter.onResponse({253:2,8:'@MISTS@after-abbey',9:[1,2]},clearHandlers);
+            expect(zonesDatabase.getZone('@MISTS@after-abbey')).toMatchObject({originZoneId:'5001',pvpType:'black'});
+        });
+
+        test('cached Mist origin alone cannot establish its PvP mode', () => {
+            EventRouter.applyObservedMapContext({mapId:'@MISTS@origin-only',source:'mists-player-joined',observedAt:1234,originCluster:'1000'});
+            expect(zonesDatabase.getZone('@MISTS@origin-only')).toMatchObject({originZoneId:'1000',pvpType:'unknown'});
+            expect(map.isBZ).toBe(false);
+        });
+
+        test.each([[undefined,'unknown'],[true,'black'],[false,'yellow']])('same-instance self522 hydrates captured origin with mode %s and preserves packet state', (mistLethal,pvpType) => {
+            const context={mapId:'@MISTS@awaiting-origin',source:'join',observedAt:Date.now()};
+            if (mistLethal !== undefined) context.mistLethal=mistLethal;
+            EventRouter.applyObservedMapContext(context);
+            EventRouter.onRequest({253:22,1:[333,-100]});
+            resources.addHarvestable(2338,'Log',6,333,-100,0,9);
+            EventRouter.onEvent({252:522,2:context.mapId,3:true,4:'1000'});
+            expect(zonesDatabase.getZone(context.mapId)).toMatchObject({originZoneId:'1000',pvpType});
+            expect(EventRouter.getMapIdentity()).toMatchObject({source:'observed',bootstrap:false});
+            expect(renderer.hasLocalPlayerPosition).toBe(true);
+            expect(EventRouter.getLocalPlayerPosition()).toEqual({x:333,y:-100});
+            expect(resources.harvestableList.map(resource=>resource.id)).toEqual([2338]);
+        });
+
+        test('a map boundary invalidates old coordinates until a real move arrives', () => {
+            EventRouter.onRequest({253: 22, 1: [0, 0]});
+            EventRouter.onResponse({253: 41, 0: '0203'}, clearHandlers);
+            resources.addHarvestable(2338, 'Log', 6, 333, -100, 0, 9);
+            renderer.update();
+            expect(resources.harvestableList.map(resource => resource.id)).toEqual([2338]);
+            EventRouter.onRequest({253: 22, 1: [0, 0]});
+            renderer.update();
+            expect(resources.harvestableList).toEqual([]);
+        });
+
+        test('a Join keeps its newly decoded position after invalidating the old map', () => {
+            EventRouter.onRequest({253: 22, 1: [0, 0]});
+            EventRouter.onResponse({253: 2, 8: '0203', 9: [333, -100]}, clearHandlers);
+            resources.addHarvestable(2338, 'Log', 6, 333, -100, 0, 9);
+            resources.addHarvestable(1, 'Log', 6, 0, 0, 0, 9);
+            renderer.update();
+            expect(resources.harvestableList.map(resource => resource.id)).toEqual([2338]);
+        });
+
+        test('malformed coordinates cannot replace a previously decoded position', () => {
+            EventRouter.onRequest({253: 22, 1: [333, -100]});
+            EventRouter.onRequest({253: 22, 1: [null, null]});
+            expect(EventRouter.getLocalPlayerPosition()).toEqual({x: 333, y: -100});
+        });
+
+        test('short position buffers do not throw or restore local coordinates', () => {
+            expect(() => EventRouter.onRequest({253: 22, 1: {type: 'Buffer', data: [1, 2]}})).not.toThrow();
+            resources.addHarvestable(2338, 'Log', 6, 333, -100, 0, 9);
+            renderer.update();
+            expect(resources.harvestableList.map(resource => resource.id)).toEqual([2338]);
+        });
+    });
 
     // -------------------------------------------------------------------------
     // onRequest opMove
@@ -194,7 +331,7 @@ describe('EventRouter', () => {
 
         // @verified 2026-04-23: idempotent. Re-firing event 522 for the same Mists instance does not
         // re-trigger setMap.
-        test('MIST-7: re-firing event 522 for same instance does not re-notify renderer', () => {
+        test('self522 for the same instance confirms observed provenance', () => {
             map.id = '@MISTS@a40183ea-3d07-4d85-b7a2-4db690f4e434';
             EventRouter.onEvent({
                 0: 1,
@@ -204,7 +341,8 @@ describe('EventRouter', () => {
                 4: '0212'
             });
 
-            expect(radarRenderer.setMap).not.toHaveBeenCalled();
+            expect(radarRenderer.setMap).toHaveBeenCalled();
+            expect(EventRouter.getMapIdentity()).toMatchObject({source:'observed',bootstrap:false});
         });
     });
 
@@ -333,7 +471,7 @@ describe('EventRouter', () => {
 
         // @verified 2026-04-29: synthetic. Mirrors the F5 sequence (sessionStorage seeded by a
         // prior session, reload triggers restoreMistOverrideFromSession before init).
-        test('MIST-90: restoreMistOverrideFromSession reapplies persisted override on F5', () => {
+        test('saved Mist metadata requires a matching currently observed instance', () => {
             sessionStorage.setItem('activeMistOverride', JSON.stringify({
                 mistMapId: '@MISTS@x',
                 originZoneId: '3316',
@@ -341,8 +479,8 @@ describe('EventRouter', () => {
             }));
 
             EventRouter.restoreMistOverrideFromSession();
-
-            expect(zonesDatabase.getPvpType('@MISTS@x')).toBe('black');
+            expect(zonesDatabase.overrides.has('@MISTS@x')).toBe(false);
+            expect(EventRouter._debugGetLastActiveMistOverride()).toBeNull();
         });
 
         // @verified 2026-04-29: synthetic. Cold start (no prior session).
@@ -516,11 +654,12 @@ describe('EventRouter', () => {
         });
 
         // @verified 2026-04-18: same map id is a no-op
-        test('opcode 41 ignored when map id unchanged', () => {
+        test('opcode 41 confirms observed identity without clearing an unchanged map', () => {
             map.id = '0203';
             EventRouter.onResponse({253: 41, 0: '0203'}, clearHandlers);
 
-            expect(radarRenderer.setMap).not.toHaveBeenCalled();
+            expect(radarRenderer.setMap).toHaveBeenCalled();
+            expect(EventRouter.getMapIdentity().source).toBe('observed');
             expect(clearHandlers).not.toHaveBeenCalled();
         });
 
@@ -1101,7 +1240,7 @@ describe('EventRouter', () => {
     // -------------------------------------------------------------------------
     describe('restoreMapFromSession', () => {
         // @verified 2026-04-25: derives isBZ from saved mapId, ignores stale persisted value (#57)
-        test('overrides stale persisted isBZ with zonesDatabase lookup on restore', () => {
+        test('a saved zone is a suggestion and cannot restore stale map offsets', () => {
             sessionStorage.setItem('lastMapDisplayed', JSON.stringify({
                 mapId: '0317',
                 hX: 100,
@@ -1112,13 +1251,14 @@ describe('EventRouter', () => {
 
             EventRouter.restoreMapFromSession();
 
-            expect(map.id).toBe('0317');
-            expect(map.isBZ).toBe(true);
+            expect(map).toMatchObject({id:-1,hX:0,hY:0,isBZ:false});
+            expect(typeof EventRouter.getSuggestedMapId).toBe('function');
+            expect(EventRouter.getSuggestedMapId()).toBe('0317');
 
             sessionStorage.clear();
         });
 
-        test('restores safe zone with isBZ false', () => {
+        test('a saved safe zone does not silently activate after startup', () => {
             sessionStorage.setItem('lastMapDisplayed', JSON.stringify({
                 mapId: '0000',
                 hX: 0,
@@ -1129,7 +1269,7 @@ describe('EventRouter', () => {
 
             EventRouter.restoreMapFromSession();
 
-            expect(map.id).toBe('0000');
+            expect(map.id).toBe(-1);
             expect(map.isBZ).toBe(false);
 
             sessionStorage.clear();
@@ -1368,7 +1508,8 @@ describe('EventRouter', () => {
 
         // @verified 2026-05-16: companion to the above. restoreMistOverrideFromSession must
         // forward pvpType to setMistOverride so Brec lethal stays black after SPA navigation.
-        test('restoreMistOverrideFromSession applies persisted pvpType (Brec lethal stays black)', () => {
+        test('restoreMistOverrideFromSession applies saved lethal metadata to a matching observed instance', () => {
+            map.id = '@MISTS@brec-letal'; map.source = 'observed';
             sessionStorage.setItem('activeMistOverride', JSON.stringify({
                 mistMapId: '@MISTS@brec-letal',
                 originZoneId: '5001',
@@ -1383,6 +1524,7 @@ describe('EventRouter', () => {
 
         // @verified 2026-05-16: companion. Brec non-lethal stays yellow on restore.
         test('restoreMistOverrideFromSession applies persisted yellow pvpType (Brec non-lethal)', () => {
+            map.id = '@MISTS@brec-yellow'; map.source = 'observed';
             sessionStorage.setItem('activeMistOverride', JSON.stringify({
                 mistMapId: '@MISTS@brec-yellow',
                 originZoneId: '5001',
@@ -1398,6 +1540,7 @@ describe('EventRouter', () => {
         // @verified 2026-05-16: backward compat. Legacy payloads without pvpType still
         // restore via origin inheritance (the prior MIST-90 behavior). BZ origin -> black.
         test('restoreMistOverrideFromSession without persisted pvpType falls back to origin inheritance', () => {
+            map.id = '@MISTS@bz-legacy'; map.source = 'observed';
             sessionStorage.setItem('activeMistOverride', JSON.stringify({
                 mistMapId: '@MISTS@bz-legacy',
                 originZoneId: '3316',
@@ -1425,6 +1568,7 @@ describe('EventRouter', () => {
         // lastActiveMistOverride must be populated so chain logic works for subsequent
         // abbey transitions.
         test('restoreMistOverrideFromSession also rebuilds lastActiveMistOverride for chain', () => {
+            map.id = '@MISTS@chain-bz'; map.source = 'observed';
             sessionStorage.setItem('activeMistOverride', JSON.stringify({
                 mistMapId: '@MISTS@chain-bz',
                 originZoneId: '3316',
@@ -1440,6 +1584,16 @@ describe('EventRouter', () => {
                 originZoneId: '3316',
                 pvpType: 'black'
             });
+        });
+
+        test('saved Mist chain metadata cannot renew expired or future evidence', () => {
+            map.id='@MISTS@aged'; map.source='observed';
+            for (const timestamp of [Date.now()-31*60*1000, Date.now()+60000, undefined]) {
+                sessionStorage.setItem('activeMistOverride',JSON.stringify({mistMapId:map.id,originZoneId:'3316',pvpType:'black',timestamp}));
+                EventRouter.restoreMistOverrideFromSession();
+                expect(zonesDatabase.overrides.has(map.id)).toBe(false);
+                expect(EventRouter._debugGetLastActiveMistOverride()).toBeNull();
+            }
         });
     });
 

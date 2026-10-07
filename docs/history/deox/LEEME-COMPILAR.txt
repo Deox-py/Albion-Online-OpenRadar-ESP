@@ -1,0 +1,61 @@
+OpenRadar 2.3ESP_Deox - AutoBuild V7.1
+
+FORMA FACIL
+===========
+
+1. Extrae TODO el ZIP a una carpeta normal.
+2. Doble clic en COMPILAR-PORTABLE.bat.
+3. El builder revisa primero lo que ya existe y solo prepara lo que falte o este desactualizado.
+4. Si todos los tests pasan, el resultado queda en:
+
+   dist\OpenRadar-2.3ESP_Deox.exe
+
+BUILDER INCREMENTAL V7.1
+========================
+
+El build normal NO debe reinstalar todo en cada ejecucion:
+
+- Go y Node: comprueba version y reutiliza la instalacion existente.
+- MSYS2/MinGW: reutiliza %LOCALAPPDATA%\OpenRadar-Deox\build-cache\msys64.
+- Npcap SDK: reutiliza la copia versionada del cache compartido.
+- npm: reutiliza node_modules si package-lock.json no cambio.
+- Si extraes otra version en otra carpeta, npm usa una cache compartida y --prefer-offline para minimizar descargas.
+- Go: reutiliza la cache de modulos cuando go.mod/go.sum no cambiaron.
+
+El builder conserva validaciones de integridad antes de usar las herramientas.
+
+BUILD LIMPIO
+============
+
+Usa COMPILAR-LIMPIO.bat SOLO si sospechas que una dependencia o cache esta dañada.
+Ese modo elimina node_modules y el cache compartido de OpenRadar y reconstruye todo desde cero.
+
+NPCAP
+=====
+
+El builder usa el SDK publico de Npcap para compilar.
+El EXE final comprueba Npcap Runtime al arrancar; si falta, pregunta antes de abrir su instalador oficial.
+
+QA
+==
+
+Antes de generar el EXE se ejecutan:
+- QA estatico
+- tests frontend
+- typecheck
+- lint
+- tests Go
+- build de CSS/vendors
+- build Windows amd64
+- smoke --version del EXE final
+
+Si algo falla, NO se publica el EXE como build correcta. Revisa build-logs\.
+
+PORTABLE FINAL
+==============
+
+El archivo para usar/compartir es:
+
+   dist\OpenRadar-2.3ESP_Deox.exe
+
+Los datos de usuario permanecen en %LOCALAPPDATA%\OpenRadar-2.3ESP_Deox\.

@@ -12,6 +12,23 @@
 }
 </style>
 <div class="space-y-4">
+    <div id="streamHealth" hidden role="status" aria-live="polite" class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2 text-sm"></div>
+    <div class="card bg-base-200">
+        <div class="card-body gap-2 p-3 sm:p-4">
+            <p id="mapIdentityStatus" role="status" aria-live="polite" data-source="unknown" class="text-sm">Zona sin identificar. Selecciona la zona actual o espera una señal capturada.</p>
+            <div class="flex flex-wrap items-end gap-2">
+                <label class="flex flex-col gap-1 text-xs">Buscar zona por nombre o ID
+                    <input id="mapZoneSearch" type="search" maxlength="120" placeholder="Nombre o ID de la zona actual" class="input input-sm w-64 max-w-full" autocomplete="off">
+                </label>
+                <label class="flex flex-col gap-1 text-xs">Zona actual
+                    <select id="mapZoneSelect" class="select select-sm w-72 max-w-full" aria-describedby="mapZoneResults"></select>
+                </label>
+                <button id="mapZoneApply" type="button" class="btn btn-primary btn-sm" disabled>Usar zona</button>
+                <button id="mapZoneClear" type="button" class="btn btn-ghost btn-sm">Detección automática</button>
+            </div>
+            <span id="mapZoneResults" class="text-xs text-base-content/60"></span>
+        </div>
+    </div>
     <!-- Canvas Section -->
     <div class="card bg-base-200">
         <div class="card-body p-2 sm:p-4">
@@ -40,11 +57,11 @@
                     </label>
                 </div>
                 <!-- Zoom control -->
-                <div class="hidden sm:flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2" title="Rueda sobre el radar para acercar o alejar">
                     <span class="text-xs text-base-content/50">Zoom:</span>
-                    <button id="zoomOut" class="btn btn-ghost btn-xs">−</button>
-                    <input type="range" id="settingRadarZoom" min="0.1" max="3" step="0.1" value="1" class="range range-primary range-xs w-24">
-                    <button id="zoomIn" class="btn btn-ghost btn-xs">+</button>
+                    <button id="zoomOut" type="button" aria-label="Alejar radar" class="btn btn-ghost btn-xs">−</button>
+                    <input type="range" id="settingRadarZoom" min="0.1" max="3" step="0.1" value="1" aria-label="Zoom del radar" class="range range-primary range-xs w-24">
+                    <button id="zoomIn" type="button" aria-label="Acercar radar" class="btn btn-ghost btn-xs">+</button>
                     <span id="zoomValue" class="text-xs text-base-content/60 font-mono w-10">100%</span>
                     <button id="zoomReset" class="btn btn-ghost btn-xs text-xs">Restablecer</button>
                 </div>
@@ -69,6 +86,22 @@
             </div>
         </div>
     </div>
+
+    <details id="eventInspector" class="collapse collapse-arrow bg-base-200">
+        <summary class="collapse-title font-semibold">Inspector experimental de eventos</summary>
+        <div class="collapse-content">
+            <p class="text-sm text-base-content/70 mb-3">Observa los eventos que ya recibe este radar. Desactivado al entrar; sin guardar tráfico automáticamente. Máximo 500 eventos recientes y límites por ráfaga.</p>
+            <div class="flex flex-wrap items-center gap-3">
+                <label class="flex items-center gap-2"><input data-inspector-enable type="checkbox" class="checkbox checkbox-sm">Activar inspector</label>
+                <label class="flex items-center gap-2"><input data-inspector-payload type="checkbox" class="checkbox checkbox-sm" disabled>Incluir parámetros en la exportación</label>
+                <button data-inspector-export type="button" class="btn btn-sm" disabled>Exportar JSONL</button>
+                <button data-inspector-clear type="button" class="btn btn-ghost btn-sm">Vaciar</button>
+            </div>
+            <p class="text-xs text-base-content/60 mt-2">Los parámetros pueden contener nombres o datos de tu sesión. Revisa el archivo antes de compartirlo. La vista muestra sólo códigos; la exportación incluye parámetros únicamente si lo habilitas. Al desactivar o salir se vacía el búfer.</p>
+            <p data-inspector-status class="text-sm mt-2" role="status">Desactivado · 0/500 eventos · 0 omitidos</p>
+            <pre data-inspector-preview class="text-xs whitespace-pre-wrap max-h-48 overflow-auto mt-2"></pre>
+        </div>
+    </details>
 
     <!-- Detected Players Section -->
     <div id="playersSection" class="card bg-base-200">
@@ -147,12 +180,22 @@
         (async function () {
             const {registerPage} = await import('/scripts/core/PageController.js');
             const {initRadar, destroyRadar} = await import('/scripts/utils/Utils.js');
+            const {RadarZoomController} = await import('/scripts/utils/RadarZoomController.js');
+            const {default: settingsSync} = await import('/scripts/utils/SettingsSync.js');
 
             // Only register once per session (avoids PageController_Overwrite warning on SPA navigation)
             if (!window._radarPageRegistered) {
+                let zoomController;
                 registerPage('radar', {
-                    init: async () => await initRadar(),
-                    destroy: () => destroyRadar()
+                    init: async signal => {
+                        await initRadar(signal);
+                        if (!signal?.aborted) zoomController = new RadarZoomController(document, settingsSync);
+                    },
+                    destroy: () => {
+                        zoomController?.destroy();
+                        zoomController = null;
+                        destroyRadar();
+                    }
                 });
                 window._radarPageRegistered = true;
             }
@@ -189,33 +232,6 @@ window.onGlobalsReady(function() {
             addListener(el, 'change', () => settingsSync.setBool(id, el.checked));
         }
     });
-
-    // Zoom controls
-    const zoomSlider = document.getElementById('settingRadarZoom');
-    const zoomValue = document.getElementById('zoomValue');
-    const zoomIn = document.getElementById('zoomIn');
-    const zoomOut = document.getElementById('zoomOut');
-    const zoomReset = document.getElementById('zoomReset');
-
-    function updateZoomDisplay(value) {
-        if (zoomValue) zoomValue.textContent = `${Math.round(value * 100)}%`;
-        if (zoomSlider) zoomSlider.value = value;
-    }
-
-    function setZoom(value) {
-        value = Math.max(0.1, Math.min(3, value));
-        settingsSync.setFloat('settingRadarZoom', value);
-        updateZoomDisplay(value);
-    }
-
-    // Initialize zoom
-    const initialZoom = settingsSync.getFloat('settingRadarZoom') || 1.0;
-    updateZoomDisplay(initialZoom);
-
-    addListener(zoomSlider, 'input', () => setZoom(parseFloat(zoomSlider.value)));
-    addListener(zoomIn, 'click', () => setZoom((settingsSync.getFloat('settingRadarZoom') || 1.0) + 0.1));
-    addListener(zoomOut, 'click', () => setZoom((settingsSync.getFloat('settingRadarZoom') || 1.0) - 0.1));
-    addListener(zoomReset, 'click', () => setZoom(1.0));
 
     // Icon Size controls
     const iconSizeSlider = document.getElementById('settingIconSize');

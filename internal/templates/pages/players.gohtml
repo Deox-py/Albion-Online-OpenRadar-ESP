@@ -195,7 +195,7 @@
                             <i data-lucide="info" class="w-4 h-4 opacity-50"></i>
                         </div>
                     </span>
-                    <input id="settingMaxPlayersDisplay" type="number" min="1" max="100" placeholder="50"
+                    <input id="settingMaxPlayersDisplay" type="number" min="1" max="100" placeholder="100"
                            class="input input-bordered w-full">
                 </label>
             </div>
@@ -275,7 +275,7 @@
 
             const settingMaxPlayersDisplay = document.getElementById("settingMaxPlayersDisplay");
             if (settingMaxPlayersDisplay) {
-                settingMaxPlayersDisplay.value = settingsSync.getNumber("settingMaxPlayersDisplay", 50);
+                settingMaxPlayersDisplay.value = settingsSync.getNumber("settingMaxPlayersDisplay", 100);
                 addListener(settingMaxPlayersDisplay, "input", () => {
                     const val = Number(settingMaxPlayersDisplay.value);
                     if (val >= 1 && val <= 100) {

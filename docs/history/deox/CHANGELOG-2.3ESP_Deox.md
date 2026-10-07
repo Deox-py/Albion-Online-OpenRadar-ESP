@@ -1,3 +1,9 @@
+## V7.1.2 - Builder/lint hotfix
+
+- Corrige `no-undef` de ESLint en el smoke offline (`window`, `localStorage`, `console`).
+- Configura `qa-v7-smoke.mjs` como entorno Node + browser y añade cobertura de regresión.
+- Sin cambios funcionales en la captura/detección respecto de V7.1.1.
+
 # OpenRadar 2.3ESP_Deox — cambios
 
 ### Portable V4 / Npcap onboarding
@@ -80,3 +86,11 @@ Base: OpenRadar `v2.2.4-beta1`.
 ## Fuera de alcance
 
 Esta rama no añade mecanismos para ocultar procesos, evadir BattlEye, modificar el juego o desactivar protecciones del sistema.
+
+## V7 — Stability & Detection
+
+- Recursos: validación Event 39/40, living/static robusto, upserts completos y retención 120.
+- Mists: layout post-Dragonfire, `originCluster`, enchant E0–E4, portales/jaulas robustos y defaults coherentes.
+- Jugadores: caché independiente del límite visual, hasta 200 detectados / 100 visibles y alertas sin duplicados.
+- Mapas: subzonas numéricas reutilizan el asset base; no se falsifican fondos de Mists sin asset real.
+- QA offline V7 documentado en `QA-V7.md`; detalles completos en `CHANGELOG-V7.md`.

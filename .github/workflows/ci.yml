@@ -2,9 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,17 +14,21 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  GOTOOLCHAIN: local
+  PUPPETEER_SKIP_DOWNLOAD: "true"
+
 jobs:
   lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
 
       - name: Verify test naming convention
         run: |
-          violations=$(find web/scripts -name '*.test.js' ! -name '_*.test.js' || true)
+          violations=$(find web/scripts -name '*.test.js' ! -name '_*.test.js')
           if [ -n "$violations" ]; then
             echo "ERROR: test files must be prefixed with _ to be excluded from go:embed"
             echo "$violations"
@@ -35,25 +40,111 @@ jobs:
         with:
           version: v2.13.2
 
-      - name: Lint Frontend
+      - name: Lint frontend, templates and tools
         run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
 
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
 
-      - name: Test Go
+      - name: Test Go with race detector
         run: go test -race ./...
 
-      - name: Test Frontend
+      - name: Test frontend
         run: npm test
 
+      - name: Static and functional offline QA
+        run: |
+          python3 tools/qa-static.py
+          node tools/qa-v7-smoke.mjs
+
+      - name: Prepare embedded frontend assets
+        run: npm run build
+
+      - name: Replay anonymized PCAP in the browser
+        run: |
+          export OPENRADAR_QA_BROWSER="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$OPENRADAR_QA_BROWSER"
+          mkdir -p .build
+          go build -buildvcs=false -o .build/qa-replay ./tools/replay-radar
+          node tools/qa-offline-browser.mjs .build/qa-replay
+
+      - name: Upload offline browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: offline-browser-qa
+          path: |
+            .build/qa/offline-browser.json
+            .build/qa/offline-failure.png
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+
+  windows-portable:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+
+      - name: Use an isolated portable builder cache
+        run: '"LOCALAPPDATA=$env:RUNNER_TEMP/openradar-local-appdata" >> $env:GITHUB_ENV'
+
+      - name: Cache portable MinGW and Npcap SDK
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/openradar-local-appdata/OpenRadar-Deox/build-cache
+          key: windows-portable-v1-${{ hashFiles('AUTO-BUILD-2.3ESP_Deox.ps1', 'tools/windows-build/release.ps1', 'go.mod', 'go.sum', 'package-lock.json') }}
+          restore-keys: windows-portable-v1-
+
+      - name: Build portable launcher with the official SDK
+        # A fresh runner needs SDK/MinGW preparation; do not use -NoInstall here.
+        # Setup provides Go/Node. No Npcap driver/runtime is installed by CI.
+        run: |
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File AUTO-BUILD-2.3ESP_Deox.ps1 -SkipQA -OutputDirectory dist/.staging/ci
+          if ($LASTEXITCODE -ne 0) { throw 'Portable Windows build failed.' }
+
+      - name: Test Windows packaging and resources
+        run: |
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-build/test.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Windows packaging/resource tests failed.' }
+
+      - name: Verify portable release metadata, checksums and embedded payload
+        run: |
+          # --version returns before live capture; no Npcap driver is needed.
+          $product = '2.3ESP_Deox-' + (Get-Content AUTOBUILD-VERSION.txt -Raw).Trim()
+          $metadata = Get-Content cmd/radar/versioninfo.json -Raw | ConvertFrom-Json
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-build/verify.ps1 -Directory dist/.staging/ci -ExpectedProduct $product -ExpectedNumeric $metadata.StringFileInfo.FileVersion
+          if ($LASTEXITCODE -ne 0) { throw 'Windows release verification failed.' }
+          'Windows verify.ps1 passed: versions/resources, checksums, ZIP and exact launcher payload. Only --version was executed; no live capture or Npcap installation.' >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload Windows build evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-portable-evidence
+          path: |
+            build-logs/*.log
+            .build/qa/release-integrity-*.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+
   lint-and-test:
-    needs: [lint, test]
+    needs: [lint, test, windows-portable]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
-      - run: echo "lint + test succeeded"
+      - run: echo "Lint, typecheck, race/frontend tests, offline QA and Windows portable packaging succeeded."

@@ -5,6 +5,7 @@ import {EventCodes} from '../utils/EventCodes.js';
 import {OperationCodes} from '../utils/OperationCodes.js';
 import {CATEGORIES} from '../constants/LoggerConstants.js';
 import zonesDatabase from '../data/ZonesDatabase.js';
+import {isSmallTreasureInfo} from '../handlers/ChestsHandler.js';
 
 function syncMapIsBZ() {
     if (!map) return;
@@ -41,9 +42,98 @@ window.lpY = lpY;
 let handlers = null;
 let map = null;
 let radarRenderer = null;
+let suggestedMapId = null;
+let mapIdentityCallback = null;
+
+export function getMapIdentity() {
+    return {mapId: map?.id ?? -1, source: map?.source ?? 'unknown',
+        observedAt: map?.observedAt ?? null, bootstrap: map?.bootstrap ?? false};
+}
+
+export function setMapIdentityCallback(callback) {
+    mapIdentityCallback = callback;
+}
+
+export function getSuggestedMapId() {
+    return suggestedMapId;
+}
+
+function publishMapIdentity() {
+    radarRenderer?.setMap?.(map);
+    mapIdentityCallback?.(getMapIdentity());
+}
+
+function setIdentity(mapId, source, observedAt = null, bootstrap = false) {
+    if (!map) return false;
+    map.id = mapId;
+    map.source = source;
+    map.observedAt = observedAt;
+    map.bootstrap = bootstrap;
+    if (source !== 'observed' || (!isPlainMistId(mapId) && !isSanctuaryId(mapId))) map.mistLethal = null;
+    window.currentMapId = mapId;
+    syncMapIsBZ();
+    persistMapToSession();
+    publishMapIdentity();
+    return true;
+}
+
+export function applyManualMapIdentity(mapId) {
+    if (typeof mapId !== 'string' || !Object.hasOwn(zonesDatabase.zones, mapId)) return false;
+    // Manual identity cannot supply the origin or risk of a dynamic Mist instance.
+    zonesDatabase.clearAllMistOverrides();
+    pendingMistChoice = null;
+    lastActiveMistOverride = null;
+    clearMistOverridePersistence();
+    return setIdentity(mapId, 'manual');
+}
+
+export function clearMapIdentity() {
+    zonesDatabase.clearAllMistOverrides();
+    pendingMistChoice = null;
+    lastActiveMistOverride = null;
+    clearMistOverridePersistence();
+    suggestedMapId = null;
+    return setIdentity(-1, 'unknown');
+}
+
+export function applyObservedMapContext(context) {
+    const validId = id => typeof id === 'string' && id.length > 0 && id.length <= 256
+        && id.trim() === id && id !== '-1';
+    if (!map || !context || !validId(context.mapId)
+        || !['join', 'change-cluster', 'mists-player-joined'].includes(context.source)
+        || !Number.isSafeInteger(context.observedAt) || context.observedAt <= 0
+        || (context.originCluster !== undefined && !validId(context.originCluster))
+        || (context.mistLethal !== undefined && typeof context.mistLethal !== 'boolean')) return false;
+    pendingMistChoice = null;
+    lastActiveMistOverride = null;
+    map.mistLethal = typeof context.mistLethal === 'boolean' ? context.mistLethal : null;
+    if (isPlainMistId(context.mapId) || isSanctuaryId(context.mapId)) {
+        // Use only explicitly captured metadata; a manual zone is not evidence of an origin.
+        zonesDatabase.clearMistOverride(context.mapId);
+        if (typeof context.originCluster === 'string' && context.originCluster.length) {
+            const pvpType = typeof context.mistLethal === 'boolean' ? (context.mistLethal ? 'black' : 'yellow') : 'unknown';
+            if (zonesDatabase.setMistOverride(context.mapId, context.originCluster, pvpType)) {
+                const resolved = zonesDatabase.getZone(context.mapId);
+                lastActiveMistOverride = {mistMapId:context.mapId, originZoneId:context.originCluster,
+                    pvpType:resolved.pvpType, ts:context.observedAt};
+            }
+        }
+    } else {
+        zonesDatabase.clearAllMistOverrides();
+        pendingMistChoice = null;
+        lastActiveMistOverride = null;
+        clearMistOverridePersistence();
+    }
+    // Cached identity is partial historical context, never a position or entity replay.
+    return setIdentity(context.mapId, 'observed', context.observedAt, true);
+}
 
 // Helper: Update local player position (DRY pattern)
 function updateLocalPlayerPosition(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        window.logger?.warn(CATEGORIES.PLAYERS, 'InvalidLocalPlayerPosition', {x, y});
+        return;
+    }
     lpX = x;
     lpY = y;
     window.lpX = lpX;
@@ -56,9 +146,7 @@ function persistMapToSession() {
     try {
         sessionStorage.setItem('lastMapDisplayed', JSON.stringify({
             mapId: map.id,
-            hX: map.hX,
-            hY: map.hY,
-            isBZ: map.isBZ,
+            source: map.source,
             timestamp: Date.now()
         }));
     } catch (e) {
@@ -105,17 +193,36 @@ function consumePendingMistChoice() {
 }
 
 function applyMapChange(newMapId, logEvent, extraLogFields = {}) {
+    radarRenderer?.invalidateLocalPlayerPosition?.();
     const previousMapId = map.id;
+    if (typeof newMapId === 'string' && newMapId.length > 0 && newMapId !== previousMapId) {
+        handlers?.chestsHandler?.Clear?.();
+    }
+    const previousSource = map.source;
+    const previousMistLethal = map.mistLethal;
     map.id = newMapId;
+    map.source = 'observed';
+    map.observedAt = Date.now();
+    map.bootstrap = false;
     window.currentMapId = map.id;
     lastMapChangeTime = Date.now();
 
     if (isPlainMistId(newMapId)) {
         const choice = consumePendingMistChoice();
+        map.mistLethal = choice ? choice.lethal : (previousSource === 'observed'
+            && (isPlainMistId(previousMapId) || isSanctuaryId(previousMapId))
+            && lastActiveMistOverride && Date.now() - lastActiveMistOverride.ts <= MIST_CHAIN_TTL_MS
+            ? previousMistLethal : null);
         let forcedPvpType = choice ? (choice.lethal ? 'black' : 'yellow') : undefined;
-        let originId;
+        const explicitOrigin = typeof extraLogFields.originCluster === 'string'
+            && extraLogFields.originCluster.length > 0
+            ? extraLogFields.originCluster
+            : null;
+        let originId = explicitOrigin;
 
-        if (isSanctuaryId(previousMapId)) {
+        if (!originId && previousSource === 'manual') {
+            // A user-selected zone does not prove where this Mist was entered.
+        } else if (!originId && isSanctuaryId(previousMapId)) {
             if (lastActiveMistOverride
                 && (Date.now() - lastActiveMistOverride.ts) <= MIST_CHAIN_TTL_MS) {
                 originId = lastActiveMistOverride.originZoneId;
@@ -123,7 +230,7 @@ function applyMapChange(newMapId, logEvent, extraLogFields = {}) {
                     forcedPvpType = lastActiveMistOverride.pvpType;
                 }
             }
-        } else if (isPlainMistId(previousMapId)) {
+        } else if (!originId && isPlainMistId(previousMapId)) {
             const prevOverride = zonesDatabase.getZone(previousMapId);
             if (prevOverride && typeof prevOverride.originZoneId === 'string') {
                 originId = prevOverride.originZoneId;
@@ -131,7 +238,7 @@ function applyMapChange(newMapId, logEvent, extraLogFields = {}) {
                     forcedPvpType = prevOverride.pvpType;
                 }
             }
-        } else {
+        } else if (!originId) {
             originId = resolveMistOriginId(previousMapId);
         }
 
@@ -152,6 +259,7 @@ function applyMapChange(newMapId, logEvent, extraLogFields = {}) {
             persistMistOverride(newMapId, lastActiveMistOverride.originZoneId, lastActiveMistOverride.pvpType);
         }
     } else {
+        map.mistLethal = null;
         zonesDatabase.clearAllMistOverrides();
         clearMistOverridePersistence();
         pendingMistChoice = null;
@@ -161,6 +269,7 @@ function applyMapChange(newMapId, logEvent, extraLogFields = {}) {
     syncMapIsBZ();
     radarRenderer?.setMap?.(map);
     persistMapToSession();
+    publishMapIdentity();
     window.logger?.info(CATEGORIES.MAP, logEvent, {
         previousMapId,
         newMapId: map.id,
@@ -170,6 +279,10 @@ function applyMapChange(newMapId, logEvent, extraLogFields = {}) {
 
 function decodeJoinPosition(p9) {
     if (p9 && p9.type === 'Buffer') {
+        if (!Array.isArray(p9.data) || p9.data.length < 8) {
+            window.logger?.warn(CATEGORIES.PLAYERS, 'InvalidJoinPositionBuffer', {});
+            return;
+        }
         const dataView = new DataView(new Uint8Array(p9.data).buffer);
         updateLocalPlayerPosition(dataView.getFloat32(0, true), dataView.getFloat32(4, true));
         window.logger?.info(CATEGORIES.PLAYERS, 'OnResponse_JoinMap_BufferDecoded', {lpX, lpY});
@@ -188,7 +301,11 @@ function decodeJoinPosition(p9) {
 
 function handleChangeClusterResponse(Parameters, clearHandlersCallback) {
     const newMapId = Parameters[0];
-    if (typeof newMapId !== 'string' || newMapId.length === 0 || newMapId === map.id) {
+    if (typeof newMapId !== 'string' || newMapId.length === 0) {
+        return;
+    }
+    if (newMapId === map.id) {
+        setIdentity(newMapId, 'observed', Date.now());
         return;
     }
     applyMapChange(newMapId, 'ChangeClusterResponse');
@@ -212,10 +329,11 @@ function handleLegacyMapChangeResponse(Parameters) {
 }
 
 function handleJoinResponse(Parameters, clearHandlersCallback) {
-    decodeJoinPosition(Parameters[9]);
+    radarRenderer?.invalidateLocalPlayerPosition?.();
     if (typeof Parameters[8] === 'string' && Parameters[8].length > 0) {
         applyMapChange(Parameters[8], 'MapChangedFromJoinMap');
     }
+    decodeJoinPosition(Parameters[9]);
     clearHandlersCallback();
 }
 
@@ -249,7 +367,10 @@ export function restoreMistOverrideFromSession() {
         const saved = sessionStorage.getItem('activeMistOverride');
         if (!saved) return;
         const data = JSON.parse(saved);
-        if (data && typeof data.mistMapId === 'string' && typeof data.originZoneId === 'string') {
+        const age = Date.now() - data?.timestamp;
+        if (data && typeof data.mistMapId === 'string' && typeof data.originZoneId === 'string'
+            && map?.source === 'observed' && map.id === data.mistMapId
+            && Number.isSafeInteger(data.timestamp) && age >= 0 && age <= MIST_CHAIN_TTL_MS) {
             zonesDatabase.setMistOverride(data.mistMapId, data.originZoneId, data.pvpType);
             const resolved = zonesDatabase.getZone(data.mistMapId);
             if (resolved) {
@@ -257,7 +378,7 @@ export function restoreMistOverrideFromSession() {
                     mistMapId: data.mistMapId,
                     originZoneId: data.originZoneId,
                     pvpType: resolved.pvpType,
-                    ts: Date.now(),
+                    ts: data.timestamp,
                 };
             }
             window.logger?.info(CATEGORIES.MAP, 'MistOverrideRestored', {
@@ -284,15 +405,11 @@ export function restoreMapFromSession() {
         if (savedMap) {
             const data = JSON.parse(savedMap);
 
-            if (data.mapId !== undefined && data.mapId !== null && data.mapId !== -1) {
-                map.id = data.mapId;
-                map.hX = data.hX || 0;
-                map.hY = data.hY || 0;
-                syncMapIsBZ();
-                window.currentMapId = map.id;
+            if (typeof data?.mapId === 'string' && Object.hasOwn(zonesDatabase.zones, data.mapId)) {
+                suggestedMapId = data.mapId;
 
                 window.logger?.info(CATEGORIES.MAP, 'MapRestoredFromSession', {
-                    mapId: map.id,
+                    mapId: suggestedMapId,
                     age: Date.now() - (data.timestamp || 0)
                 });
             }
@@ -342,7 +459,7 @@ export function onEvent(Parameters) {
             mobsHandler.removeMist(id);
             mobsHandler.removeMob(id);
             dungeonsHandler.removeDungeon(id);
-            chestsHandler.removeChest(id);
+            chestsHandler.removeChest(Parameters[0]);
             fishingHandler.removeFish(id);
             wispCageHandler.removeCage(id);
             handlers.mistsDungeonHandler?.removePortal(id);
@@ -433,9 +550,15 @@ export function onEvent(Parameters) {
             playersHandler.updateItems(id, Parameters);
             break;
 
-        case EventCodes.NewMob:
-            mobsHandler.NewMobEvent(Parameters);
+        case EventCodes.NewMob: {
+            const info = window.mobsDatabase?.getMobInfo(Parameters[1]);
+            if (isSmallTreasureInfo(info)) {
+                if (chestsHandler.addSmallTreasureEvent(Parameters, info)) mobsHandler.removeMob(id);
+            } else {
+                mobsHandler.NewMobEvent(Parameters);
+            }
             break;
+        }
 
         case EventCodes.Mounted:
             playersHandler.handleMountedPlayerEvent(id, Parameters);
@@ -457,6 +580,14 @@ export function onEvent(Parameters) {
 
         case EventCodes.NewLootChest:
             chestsHandler.addChestEvent(Parameters);
+            break;
+
+        case EventCodes.UpdateLootChest:
+            chestsHandler.updateChestEvent(Parameters);
+            break;
+
+        case EventCodes.LootChestOpened:
+            chestsHandler.chestOpenedEvent(Parameters);
             break;
 
         case EventCodes.NewCagedObject:
@@ -481,11 +612,33 @@ export function onEvent(Parameters) {
 
         case EventCodes.MistsPlayerJoinedInfo: {
             const newMapId = Parameters[2];
-            if (Parameters[3] === true && typeof newMapId === 'string' && newMapId.length > 0 && newMapId !== map.id) {
-                applyMapChange(newMapId, 'MistsPlayerJoinedInfo', {originCluster: Parameters[4]});
+            if (Parameters[3] === true && typeof newMapId === 'string' && newMapId.length > 0) {
+                if (newMapId !== map.id) {
+                    applyMapChange(newMapId, 'MistsPlayerJoinedInfo', {originCluster: Parameters[4]});
+                } else {
+                    if (isPlainMistId(newMapId) || isSanctuaryId(newMapId)) {
+                        const choice = consumePendingMistChoice();
+                        if (choice) map.mistLethal = choice.lethal;
+                        const pvpType = typeof map.mistLethal === 'boolean' ? (map.mistLethal ? 'black' : 'yellow') : 'unknown';
+                        if (typeof Parameters[4] === 'string' && zonesDatabase.setMistOverride(newMapId, Parameters[4], pvpType)) {
+                            lastActiveMistOverride = {mistMapId:newMapId,originZoneId:Parameters[4],pvpType,ts:Date.now()};
+                            persistMistOverride(newMapId,Parameters[4],pvpType);
+                        }
+                    }
+                    setIdentity(newMapId, 'observed', Date.now());
+                }
             }
             break;
         }
+
+        case EventCodes.NewMistsImmediateReturnExit:
+        case EventCodes.NewMistsStaticEntrance:
+        case EventCodes.MistsEntranceDataChanged:
+            // Passive diagnostics only. These post-Dragonfire events are not yet
+            // used as positional signals because their payload semantics are not
+            // fully verified. Logging them helps future protocol fixes safely.
+            window.logger?.debug(CATEGORIES.MAP, 'MistsAuxEvent', {eventCode, parameters: Parameters});
+            break;
 
     }
 }
@@ -499,6 +652,10 @@ export function onRequest(Parameters) {
         }
         // Legacy Buffer handling
         else if (Parameters[1] && Parameters[1].type === 'Buffer') {
+            if (!Array.isArray(Parameters[1].data) || Parameters[1].data.length < 8) {
+                window.logger?.warn(CATEGORIES.PLAYERS, 'InvalidMovePositionBuffer', {});
+                return;
+            }
             const uint8Array = new Uint8Array(Parameters[1].data);
             const dataView = new DataView(uint8Array.buffer);
             updateLocalPlayerPosition(dataView.getFloat32(0, true), dataView.getFloat32(4, true));
@@ -538,6 +695,7 @@ export function onResponse(Parameters, clearHandlersCallback) {
 }
 
 export function reset() {
+    handlers?.chestsHandler?.Clear?.();
     lpX = 0.0;
     lpY = 0.0;
     window.lpX = 0;
@@ -545,6 +703,8 @@ export function reset() {
     lastMapChangeTime = 0;
     pendingMistChoice = null;
     lastActiveMistOverride = null;
+    suggestedMapId = null;
+    mapIdentityCallback = null;
 
     // Clear references to prevent memory leaks
     handlers = null;

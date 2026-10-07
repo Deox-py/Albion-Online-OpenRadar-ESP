@@ -5,8 +5,9 @@ import {CATEGORIES} from '../constants/LoggerConstants.js';
 
 const pageHandlers = new Map();
 let currentPage = null;
-let isTransitioning = false;
-let destroyPromise = null;  // Track ongoing destroy for race condition prevention
+let transitionPromise = Promise.resolve();
+let initController = null;
+let navigationGeneration = 0;
 let isPageControllerInitialized = false;  // Guard against duplicate initialization
 
 export function registerPage(pageName, handlers) {
@@ -20,6 +21,11 @@ export function registerPage(pageName, handlers) {
         })
     });
     window.logger?.debug(CATEGORIES.SYSTEM, 'PageController_Registered', {pageName});
+    // Page modules arrive through dynamic imports. DOMContentLoaded/HTMX may
+    // settle before registration; start the now-ready page in that case.
+    if (document.readyState !== 'loading' && detectCurrentPage() === pageName) {
+        void initCurrentPage();
+    }
 }
 
 function detectCurrentPage() {
@@ -27,68 +33,63 @@ function detectCurrentPage() {
     return pageContent?.dataset?.page || null;
 }
 
-async function destroyCurrentPage() {
-    if (!currentPage) return;
-
-    // Wait for any ongoing transition to complete
-    if (isTransitioning && destroyPromise) {
-        await destroyPromise;
-        return;  // Already destroyed by previous call
-    }
-
-    isTransitioning = true;
-    const pageToDestroy = currentPage;
-
-    destroyPromise = (async () => {
-        const handlers = pageHandlers.get(pageToDestroy);
-        if (handlers?.destroy) {
-            try {
-                window.logger?.info(CATEGORIES.SYSTEM, 'PageController_Destroying', {page: pageToDestroy});
-                await handlers.destroy();
-            } catch (error) {
-                window.logger?.error(CATEGORIES.SYSTEM, 'PageController_DestroyError', {
-                    page: pageToDestroy,
-                    error: error.message
-                });
-            }
-        }
-        currentPage = null;
-        isTransitioning = false;
-        destroyPromise = null;
-    })();
-
-    await destroyPromise;
+// Queue the complete lifecycle, including async init. Destroying an instance
+// before its initializer settles can leave late sockets/timers orphaned.
+function transition(action) {
+    const next = transitionPromise.then(action);
+    transitionPromise = next.catch(error => {
+        window.logger?.error(CATEGORIES.SYSTEM, 'PageController_TransitionError', {error: error.message});
+    });
+    return next;
 }
 
-async function initCurrentPage() {
-    const newPage = detectCurrentPage();
+async function destroyActivePage() {
+    if (!currentPage) return;
+    const pageToDestroy = currentPage;
+    try {
+        window.logger?.info(CATEGORIES.SYSTEM, 'PageController_Destroying', {page: pageToDestroy});
+        await pageHandlers.get(pageToDestroy)?.destroy();
+    } catch (error) {
+        window.logger?.error(CATEGORIES.SYSTEM, 'PageController_DestroyError', {page: pageToDestroy, error: error.message});
+    } finally {
+        currentPage = null;
+    }
+}
+
+function destroyCurrentPage() {
+    navigationGeneration++;
+    initController?.abort();
+    return transition(destroyActivePage);
+}
+
+async function initializeVisiblePage() {
+    // Read the page when the queued operation runs, since multiple HTMX swaps
+    // can happen while a database or page module is still loading.
+    let newPage = detectCurrentPage();
     if (!newPage || newPage === currentPage) return;
-
-    // Wait for any ongoing destroy to complete first
-    if (destroyPromise) {
-        await destroyPromise;
-    }
-
-    // Double-check after waiting - page might have changed
-    if (currentPage === newPage) return;
-
-    isTransitioning = true;
-    currentPage = newPage;
-
+    if (!pageHandlers.has(newPage)) return;
+    const generation = navigationGeneration;
+    await destroyActivePage();
+    if (generation !== navigationGeneration) return;
+    newPage = detectCurrentPage();
     const handlers = pageHandlers.get(newPage);
-    if (handlers?.init) {
-        try {
-            window.logger?.info(CATEGORIES.SYSTEM, 'PageController_Initializing', {page: newPage});
-            await handlers.init();
-        } catch (error) {
-            window.logger?.error(CATEGORIES.SYSTEM, 'PageController_InitError', {page: newPage, error: error.message});
-            if (window.toast) {
-                window.toast.error(`Failed to initialize ${newPage} page`);
-            }
-        }
+    if (!handlers) return;
+    currentPage = newPage;
+    initController = new AbortController();
+    try {
+        window.logger?.info(CATEGORIES.SYSTEM, 'PageController_Initializing', {page: newPage});
+        await handlers.init(initController.signal);
+    } catch (error) {
+        window.logger?.error(CATEGORIES.SYSTEM, 'PageController_InitError', {page: newPage, error: error.message});
+        window.toast?.error('No se pudo inicializar esta página');
+        await destroyActivePage();
+    } finally {
+        initController = null;
     }
+}
 
-    isTransitioning = false;
+function initCurrentPage() {
+    return transition(initializeVisiblePage);
 }
 
 export function initPageController() {
@@ -118,6 +119,7 @@ export function initPageController() {
             initCurrentPage();
         }, 0);
     });
+    if (document.readyState !== 'loading') void initCurrentPage();
 
     // Handle browser back/forward navigation
     window.addEventListener('popstate', () => window.location.reload());
@@ -126,8 +128,12 @@ export function initPageController() {
 }
 
 export function reinitCurrentPage() {
-    currentPage = null;
-    return initCurrentPage();
+    navigationGeneration++;
+    initController?.abort();
+    return transition(async () => {
+        await destroyActivePage();
+        await initializeVisiblePage();
+    });
 }
 
 initPageController();

@@ -76,11 +76,12 @@ func (a *NetworkAPI) handleList(w http.ResponseWriter, _ *http.Request) {
 }
 
 type stateBody struct {
-	CaptureInterfaces []capture.CaptureSummary `json:"captureInterfaces"`
-	IsCapturing       bool                     `json:"isCapturing"`
-	LanAddresses      []string                 `json:"lanAddresses"`
-	LastErrors        map[string]string        `json:"lastErrors"`
-	Status            string                   `json:"status"`
+	CaptureInterfaces  []capture.CaptureSummary  `json:"captureInterfaces"`
+	IsCapturing        bool                      `json:"isCapturing"`
+	LanAddresses       []string                  `json:"lanAddresses"`
+	LastErrors         map[string]string         `json:"lastErrors"`
+	Status             string                    `json:"status"`
+	CaptureDiagnostics *capture.DiagnosticsStats `json:"captureDiagnostics,omitempty"`
 }
 
 func (a *NetworkAPI) handleState(w http.ResponseWriter, _ *http.Request) {
@@ -91,6 +92,14 @@ func (a *NetworkAPI) handleState(w http.ResponseWriter, _ *http.Request) {
 		LanAddresses:      a.lanAddrs(),
 		LastErrors:        s.LastErrors,
 		Status:            string(s.Status),
+	}
+	if sampler, ok := a.mgr.(interface{ Stats() capture.AggregateStats }); ok {
+		stats := sampler.Stats()
+		body.CaptureDiagnostics = &capture.DiagnosticsStats{
+			TruncatedFrames:      stats.TruncatedFrames,
+			DecodeErrors:         stats.DecodeErrors,
+			IPv4FragmentsSkipped: stats.IPv4FragmentsSkipped,
+		}
 	}
 	writeJSON(w, http.StatusOK, body)
 }

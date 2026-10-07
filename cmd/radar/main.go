@@ -288,7 +288,11 @@ func newApp(
 	app.photonParser.OnEncrypted = app.onPhotonEncrypted
 	app.photonParser.OnParseError = app.onPhotonParseError
 
-	app.captureManager.OnPacket(app.handlePacket)
+	app.captureManager.OnPacketInfo(app.handlePacketInfo)
+	app.captureManager.OnCaptureChange(func() {
+		app.photonParser.ResetFragments()
+		app.wsHandler.InvalidateMapContext("capture-changed")
+	})
 
 	return app, nil
 }
@@ -388,34 +392,38 @@ func (app *App) updateStats() {
 				logStats := app.logger.GetStats()
 				topReason, topCount, lastReason, lastPayloadLen := app.parseDiagnostics()
 				app.program.Send(ui.StatsMsg{
-					Packets:            app.packetsProcessed.Load(),
-					Errors:             app.packetsErrors.Load(),
-					Encrypted:          app.packetsEncrypted.Load(),
-					TopParseReason:     topReason,
-					TopParseCount:      topCount,
-					LastParseReason:    lastReason,
-					LastPayloadLen:     lastPayloadLen,
-					PcapReceived:       pcapStats.PacketsReceived,
-					PcapDropped:        pcapStats.PacketsDropped,
-					PcapIfDropped:      pcapStats.PacketsIfDropped,
-					PcapStatsErrors:    pcapStats.ReadErrors,
-					WsReadErrors:       wsStats.ReadErrors,
-					WsWriteFailures:    wsStats.WriteFailures,
-					WsNormalCloses:     wsStats.NormalCloses,
-					WsQueueDrops:       wsStats.QueueDrops,
-					WsNoClientMessages: wsStats.NoClientMessages,
-					WsClients:          app.wsHandler.ClientCount(),
-					MemoryMB:           heapMB,
-					MemorySysMB:        sysMB,
-					Goroutines:         runtime.NumGoroutine(),
-					WsBatches:          wsStats.BatchesSent,
-					WsMessages:         wsStats.MessagesSent,
-					WsQueueSize:        wsStats.MessagesQueue,
-					BytesReceived:      app.captureManager.BytesReceived(),
-					BytesSent:          wsStats.BytesSent,
-					LogEntries:         logStats.TotalEntries,
-					LogBatches:         logStats.TotalBatches,
-					LogBufferSize:      logStats.BufferSize,
+					Packets:              app.packetsProcessed.Load(),
+					Errors:               app.packetsErrors.Load(),
+					Encrypted:            app.packetsEncrypted.Load(),
+					TopParseReason:       topReason,
+					TopParseCount:        topCount,
+					LastParseReason:      lastReason,
+					LastPayloadLen:       lastPayloadLen,
+					PcapReceived:         pcapStats.PacketsReceived,
+					PcapDropped:          pcapStats.PacketsDropped,
+					PcapIfDropped:        pcapStats.PacketsIfDropped,
+					PcapStatsErrors:      pcapStats.ReadErrors,
+					RecordingQueueDrops:  pcapStats.RecordingQueueDrops,
+					RecordingWriteErrors: pcapStats.RecordingWriteErrors,
+					WsReadErrors:         wsStats.ReadErrors,
+					WsWriteFailures:      wsStats.WriteFailures,
+					WsNormalCloses:       wsStats.NormalCloses,
+					WsQueueDrops:         wsStats.QueueDrops,
+					WsClientQueueDrops:   wsStats.ClientQueueDrops,
+					WsStreamResets:       wsStats.StreamResets,
+					WsNoClientMessages:   wsStats.NoClientMessages,
+					WsClients:            app.wsHandler.ClientCount(),
+					MemoryMB:             heapMB,
+					MemorySysMB:          sysMB,
+					Goroutines:           runtime.NumGoroutine(),
+					WsBatches:            wsStats.BatchesSent,
+					WsMessages:           wsStats.MessagesSent,
+					WsQueueSize:          wsStats.MessagesQueue,
+					BytesReceived:        app.captureManager.BytesReceived(),
+					BytesSent:            wsStats.BytesSent,
+					LogEntries:           logStats.TotalEntries,
+					LogBatches:           logStats.TotalBatches,
+					LogBufferSize:        logStats.BufferSize,
 				})
 
 				captureActive := len(app.captureManager.State().Active) > 0
@@ -438,8 +446,8 @@ func memoryStatsMB() (heapMB, sysMB float64) {
 	return float64(samples[0].Value.Uint64()) / 1024 / 1024, float64(samples[1].Value.Uint64()) / 1024 / 1024
 }
 
-func (app *App) handlePacket(payload []byte) {
-	if app.photonParser.ReceivePacket(payload) {
+func (app *App) handlePacketInfo(info capture.PacketInfo) {
+	if app.photonParser.ReceivePacketFlow(info.FlowKey(), info.Payload) {
 		app.packetsProcessed.Add(1)
 	}
 }
@@ -526,7 +534,7 @@ func (app *App) shutdown() {
 func resolveDataDir() (string, error) {
 	if local := os.Getenv("LOCALAPPDATA"); local != "" {
 		dir := filepath.Join(local, "OpenRadar-2.3ESP_Deox")
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G703 -- Fixed application directory beneath the local user's app-data root, never a request path.
 			return "", err
 		}
 		return dir, nil
@@ -559,7 +567,7 @@ func migrateLegacyUserData(sourceDir, dataDir string) error {
 			}
 			return err
 		}
-		if err := os.WriteFile(dst, data, 0o644); err != nil {
+		if err := os.WriteFile(dst, data, 0o644); err != nil { // #nosec G703 -- Migrates only the two fixed legacy filenames into the resolved local app-data directory.
 			return err
 		}
 	}
@@ -579,7 +587,7 @@ func npcapRuntimePresent() bool {
 		filepath.Join(windir, "System32", "wpcap.dll"),
 	}
 	for _, candidate := range candidates {
-		if _, err := os.Stat(candidate); err == nil {
+		if _, err := os.Stat(candidate); err == nil { // #nosec G703 -- Checks fixed Npcap DLL names beneath the local Windows directory, never a request path.
 			return true
 		}
 	}
@@ -590,11 +598,11 @@ func openBrowser(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url) // #nosec G204 -- Fixed OS launcher receives the generated localhost URL as an argument, without a shell.
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", url) // #nosec G204 -- Fixed OS launcher receives the generated localhost URL as an argument, without a shell.
 	default:
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.Command("xdg-open", url) // #nosec G204 -- Fixed OS launcher receives the generated localhost URL as an argument, without a shell.
 	}
 	return cmd.Start()
 }

@@ -22,6 +22,20 @@ const {DrawingUtils} = await import('./DrawingUtils.js');
 const settingsSync = (await import('./SettingsSync.js')).default;
 const imageCache = (await import('./ImageCache.js')).default;
 
+describe('DrawingUtils radar zoom', () => {
+    test('honors the chosen zoom on a narrow screen', () => {
+        const width = window.innerWidth;
+        window.innerWidth = 500;
+        settingsSync.getFloat.mockReturnValue(2);
+        try { expect(new DrawingUtils().getZoomLevel()).toBe(2); }
+        finally { window.innerWidth = width; }
+    });
+    test.each([Infinity, NaN, 0])('invalid scale %s cannot corrupt projection', value => {
+        settingsSync.getFloat.mockReturnValue(value);
+        expect(new DrawingUtils().getZoomLevel()).toBe(1);
+    });
+});
+
 describe('DrawingUtils marker scaling helpers', () => {
     let utils;
 
@@ -308,4 +322,3 @@ describe('DrawingUtils.drawResourceBadge', () => {
         expect(ctx.fillRect).toHaveBeenCalledWith(70, 70, 60, 60);
     });
 });
-

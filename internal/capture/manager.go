@@ -24,10 +24,15 @@ const (
 // handle. These counters are diagnostic only; capture continues if a handle does
 // not expose stats on the current platform.
 type AggregateStats struct {
-	PacketsReceived  uint64
-	PacketsDropped   uint64
-	PacketsIfDropped uint64
-	ReadErrors       uint64
+	PacketsReceived      uint64
+	PacketsDropped       uint64
+	PacketsIfDropped     uint64
+	ReadErrors           uint64
+	RecordingQueueDrops  uint64
+	RecordingWriteErrors uint64
+	TruncatedFrames      uint64
+	DecodeErrors         uint64
+	IPv4FragmentsSkipped uint64
 }
 
 type CaptureSummary struct {
@@ -50,13 +55,17 @@ type Manager struct {
 	parentCtx context.Context
 
 	mu               sync.Mutex
+	reconfigureMu    sync.Mutex
 	active           map[string]*managedCapturer
 	wg               sync.WaitGroup
 	onPacket         PacketHandler
+	onPacketInfo     PacketInfoHandler
+	onCaptureChange  func()
 	lastErrors       map[string]string
 	closed           bool
 	recordingEnabled bool
 	recordingDir     string
+	closeDone        chan struct{}
 }
 
 type managedCapturer struct {
@@ -76,16 +85,39 @@ func NewManager(parentCtx context.Context) *Manager {
 func (m *Manager) OnPacket(h PacketHandler) {
 	m.mu.Lock()
 	m.onPacket = h
+	for _, mc := range m.active {
+		mc.cap.OnPacket(h)
+	}
+	m.mu.Unlock()
+}
+
+func (m *Manager) OnPacketInfo(h PacketInfoHandler) {
+	m.mu.Lock()
+	m.onPacketInfo = h
+	for _, mc := range m.active {
+		mc.cap.OnPacketInfo(h)
+	}
+	m.mu.Unlock()
+}
+
+// OnCaptureChange runs after every previous reader has stopped and before any
+// replacement reader starts. Unchanged discovery does not invalidate state.
+// The callback may inspect State, but must not call Reconfigure or Close.
+func (m *Manager) OnCaptureChange(h func()) {
+	m.mu.Lock()
+	m.onCaptureChange = h
 	m.mu.Unlock()
 }
 
 func (m *Manager) Reconfigure(target []NetworkInterface) error {
+	m.reconfigureMu.Lock()
+	defer m.reconfigureMu.Unlock()
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
 		return errors.New("manager closed")
 	}
-	if m.onPacket == nil {
+	if m.onPacket == nil && m.onPacketInfo == nil {
 		m.mu.Unlock()
 		return errors.New("OnPacket must be called before Reconfigure")
 	}
@@ -94,19 +126,77 @@ func (m *Manager) Reconfigure(target []NetworkInterface) error {
 	for _, i := range target {
 		desired[i.Name] = i
 	}
+	unchanged := len(desired) == len(m.active)
+	for name, iface := range desired {
+		mc := m.active[name]
+		if mc == nil || mc.cap.iface.Device != iface.Device {
+			unchanged = false
+		}
+	}
+	if unchanged {
+		m.mu.Unlock()
+		return nil
+	}
 
 	var openErrs []string
+	retainedReopenFailed := false
+	prepared := make(map[string]*Capturer, len(desired))
 	for name, iface := range desired {
-		if _, exists := m.active[name]; exists {
-			continue
-		}
 		c, err := captureFactory(m.parentCtx, iface)
 		if err != nil {
+			if old := m.active[name]; old != nil && old.cap.iface.Device == iface.Device {
+				retainedReopenFailed = true
+			}
 			m.lastErrors[name] = err.Error()
 			openErrs = append(openErrs, fmt.Sprintf("%s: %v", name, err))
 			continue
 		}
+		prepared[name] = c
+	}
+	// If only an extra interface failed to open, preserve the working readers
+	// and their retained metadata. Prepared handles have not started delivery.
+	unchanged = len(prepared) == len(m.active)
+	for name, c := range prepared {
+		mc := m.active[name]
+		if mc == nil || mc.cap.iface.Device != c.iface.Device {
+			unchanged = false
+		}
+	}
+	if unchanged || retainedReopenFailed {
+		m.mu.Unlock()
+		for _, c := range prepared {
+			c.Close()
+		}
+		if len(openErrs) > 0 {
+			return fmt.Errorf("partial open failures: %v", openErrs)
+		}
+		return nil
+	}
+
+	removed := make([]*Capturer, 0, len(m.active))
+	for name, mc := range m.active {
+		mc.cancel()
+		removed = append(removed, mc.cap)
+		if _, keep := desired[name]; !keep {
+			delete(m.lastErrors, name)
+		}
+	}
+	m.active = make(map[string]*managedCapturer, len(prepared))
+	onChange := m.onCaptureChange
+	m.mu.Unlock()
+	// Joining all old readers also covers interfaces retained in the selection:
+	// none can repopulate metadata while the source boundary is invalidated.
+	for _, c := range removed {
+		c.Close()
+	}
+	if onChange != nil {
+		onChange()
+	}
+
+	m.mu.Lock()
+	for name, c := range prepared {
 		c.OnPacket(m.onPacket)
+		c.OnPacketInfo(m.onPacketInfo)
 		mc := &managedCapturer{cap: c, startedAt: time.Now(), cancel: c.cancel}
 		m.active[name] = mc
 		delete(m.lastErrors, name)
@@ -117,20 +207,13 @@ func (m *Manager) Reconfigure(target []NetworkInterface) error {
 		}
 		managerStartWorker(c, &m.wg, func(n string, e error) {
 			m.mu.Lock()
-			m.lastErrors[n] = e.Error()
-			delete(m.active, n)
+			// A late error from a removed reader must not remove its replacement.
+			if m.active[n] == mc {
+				m.lastErrors[n] = e.Error()
+				delete(m.active, n)
+			}
 			m.mu.Unlock()
 		})
-	}
-
-	for name, mc := range m.active {
-		if _, keep := desired[name]; keep {
-			continue
-		}
-		mc.cancel()
-		mc.cap.Close()
-		delete(m.active, name)
-		delete(m.lastErrors, name)
 	}
 
 	m.mu.Unlock()
@@ -206,6 +289,13 @@ func (m *Manager) Stats() AggregateStats {
 	defer m.mu.Unlock()
 	var out AggregateStats
 	for _, mc := range m.active {
+		recording := mc.cap.RecordingStats()
+		out.RecordingQueueDrops += recording.QueueDrops
+		out.RecordingWriteErrors += recording.WriteErrors
+		diagnostics := mc.cap.DiagnosticsStats()
+		out.TruncatedFrames += diagnostics.TruncatedFrames
+		out.DecodeErrors += diagnostics.DecodeErrors
+		out.IPv4FragmentsSkipped += diagnostics.IPv4FragmentsSkipped
 		st, err := mc.cap.Stats()
 		if err != nil {
 			out.ReadErrors++
@@ -255,11 +345,18 @@ func (m *Manager) State() State {
 
 // Close cancels all read loops, waits for workers, then closes handles.
 // libpcap is unsafe to close while a Read poll is in flight, so handles
-// are closed only after wg.Wait or closeCtx expires.
+// are closed only after wg.Wait, including when closeCtx expires first.
 func (m *Manager) Close(closeCtx context.Context) {
+	m.reconfigureMu.Lock()
 	m.mu.Lock()
 	if m.closed {
+		done := m.closeDone
 		m.mu.Unlock()
+		m.reconfigureMu.Unlock()
+		select {
+		case <-done:
+		case <-closeCtx.Done():
+		}
 		return
 	}
 	m.closed = true
@@ -271,26 +368,34 @@ func (m *Manager) Close(closeCtx context.Context) {
 		captures = append(captures, mc.cap)
 	}
 	m.active = nil
+	m.closeDone = make(chan struct{})
+	done := m.closeDone
 	m.mu.Unlock()
+	m.reconfigureMu.Unlock()
 
-	done := make(chan struct{})
 	go func() {
 		m.wg.Wait()
+		for _, c := range captures {
+			c.Close()
+		}
 		close(done)
 	}()
 	select {
 	case <-done:
 	case <-closeCtx.Done():
 	}
-	for _, c := range captures {
-		c.Close()
-	}
 }
 
 func startWorker(c *Capturer, wg *sync.WaitGroup, onError func(string, error)) {
 	wg.Go(func() {
-		if err := c.Start(); err != nil && !errors.Is(err, context.Canceled) {
-			onError(c.iface.Name, err)
+		defer c.Close()
+		err := c.Start()
+		if c.ctx.Err() != nil {
+			return
 		}
+		if err == nil {
+			err = errors.New("capture source stopped unexpectedly; reselect the interface to restart")
+		}
+		onError(c.iface.Name, err)
 	})
 }

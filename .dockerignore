@@ -9,3 +9,9 @@ work
 *.7z
 *.tar.gz
 *.log
+
+# Local backups, build caches and user capture/configuration data
+.build
+build-logs
+captures
+network.json

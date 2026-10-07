@@ -3,7 +3,6 @@ import settingsSync from './utils/SettingsSync.js';
 import {buildWsUrl} from './utils/wsUrl.js';
 
 let socket = null;
-let socketConnected = false;
 let reconnectAttempts = 0;
 let reconnectTimeoutId = null;
 const MAX_RECONNECT_DELAY = 30000;
@@ -17,7 +16,6 @@ class Logger {
         this.maxBufferSize = 200;
         this.flushIntervalMs = 5000;
         this.flushIntervalId = null;
-        this.startFlushInterval();
     }
 
     startFlushInterval() {
@@ -69,7 +67,10 @@ class Logger {
             this.logToConsole(logEntry);
         }
 
-        if (settingsSync.getBool('settingLogToServer') && socketConnected) {
+        if (settingsSync.getBool('settingLogToServer')) {
+            // Keep a bounded backlog while the log-only connection is opening
+            // or reconnecting. Retain it until the transport accepts the send.
+            if (this.buffer.length >= this.maxBufferSize) this.buffer.shift();
             this.buffer.push(logEntry);
             if (this.buffer.length >= this.maxBufferSize) this.flush();
         }
@@ -107,17 +108,17 @@ class Logger {
     }
 
     flush() {
-        if (this.buffer.length === 0) return;
+        if (!settingsSync.getBool('settingLogToServer') || this.buffer.length === 0) return;
 
         if (this.wsClient && this.wsClient.readyState === WebSocket.OPEN) {
             try {
                 this.wsClient.send(JSON.stringify({type: 'logs', logs: this.buffer}));
+                this.buffer = [];
             } catch (e) {
                 // Exception: console allowed here to avoid logger recursion
                 console.warn('[Logger] WebSocket send failed:', e?.message);
             }
         }
-        this.buffer = [];
     }
 }
 
@@ -126,21 +127,21 @@ window.logger = globalLogger;
 
 function onLoggerSocketOpen() {
     reconnectAttempts = 0;
-    socketConnected = true;
     globalLogger.wsClient = socket;
+    globalLogger.flush();
 }
 
 function onLoggerSocketClose() {
-    socketConnected = false;
     globalLogger.wsClient = null;
     scheduleLoggerReconnect();
 }
 
 function onLoggerSocketError() {
-    socketConnected = false;
+    globalLogger.wsClient = null;
 }
 
 function cleanupLoggerSocket() {
+    globalLogger.wsClient = null;
     if (socket) {
         socket.removeEventListener('open', onLoggerSocketOpen);
         socket.removeEventListener('close', onLoggerSocketClose);
@@ -155,9 +156,10 @@ function cleanupLoggerSocket() {
 }
 
 function connectLoggerWebSocket() {
+    if (!settingsSync.getBool('settingLogToServer')) return;
     cleanupLoggerSocket();
     try {
-        socket = new WebSocket(buildWsUrl());
+        socket = new WebSocket(`${buildWsUrl()}?mode=logs`);
         socket.addEventListener('open', onLoggerSocketOpen);
         socket.addEventListener('close', onLoggerSocketClose);
         socket.addEventListener('error', onLoggerSocketError);
@@ -169,11 +171,35 @@ function connectLoggerWebSocket() {
 }
 
 function scheduleLoggerReconnect() {
+    if (!settingsSync.getBool('settingLogToServer') || reconnectTimeoutId !== null) return;
     reconnectAttempts++;
     const delay = Math.min(INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
-    reconnectTimeoutId = setTimeout(connectLoggerWebSocket, delay);
+    reconnectTimeoutId = setTimeout(() => {
+        reconnectTimeoutId = null;
+        connectLoggerWebSocket();
+    }, delay);
+}
+
+function syncServerLogging() {
+    if (settingsSync.getBool('settingLogToServer')) {
+        if (!globalLogger.flushIntervalId) globalLogger.startFlushInterval();
+        if (!socket || socket.readyState === WebSocket.CLOSED) connectLoggerWebSocket();
+    } else {
+        cleanupLoggerSocket();
+        globalLogger.stopFlushInterval();
+        globalLogger.buffer = [];
+        reconnectAttempts = 0;
+    }
+}
+
+function shutdownLogger() {
+    cleanupLoggerSocket();
+    globalLogger.stopFlushInterval();
+    settingsSync.off('settingLogToServer', syncServerLogging);
 }
 
 export {globalLogger as logger};
 
-connectLoggerWebSocket();
+settingsSync.on('settingLogToServer', syncServerLogging);
+window.addEventListener('beforeunload', shutdownLogger, {once: true});
+syncServerLogging();

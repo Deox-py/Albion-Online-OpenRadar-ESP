@@ -2,23 +2,25 @@
   "FixedFileInfo": {
     "FileVersion": {
       "Major": 2,
-      "Minor": 1,
+      "Minor": 3,
       "Patch": 0,
-      "Build": 0
+      "Build": 732
     },
     "ProductVersion": {
       "Major": 2,
-      "Minor": 1,
+      "Minor": 3,
       "Patch": 0,
-      "Build": 0
+      "Build": 732
     }
   },
   "StringFileInfo": {
-    "FileDescription": "OpenRadar - Albion Online Radar",
-    "FileVersion": "2.1.0",
-    "ProductName": "OpenRadar",
-    "ProductVersion": "2.1.0",
-    "LegalCopyright": "MIT License"
+    "FileDescription": "OpenRadar 2.3ESP Deox - Radar Diagnostics Core",
+    "FileVersion": "2.3.0.732",
+    "ProductName": "OpenRadar 2.3ESP Deox",
+    "ProductVersion": "2.3ESP_Deox-V7.3.2",
+    "OriginalFilename": "OpenRadar-core.exe",
+    "InternalName": "OpenRadar-core",
+    "LegalCopyright": "MIT License; see LICENSE"
   },
   "IconPath": "../../web/images/favicon.ico"
 }

@@ -1,5 +1,6 @@
 import {readFileSync} from 'node:fs';
 import {describe, expect, test} from 'vitest';
+import {normalizeRadarZoom} from './RadarZoomController.js';
 
 const radarTemplate = readFileSync(
     'internal/templates/pages/radar.gohtml',
@@ -11,8 +12,10 @@ describe('radar zoom range contract', () => {
         expect(radarTemplate).toContain(
             'id="settingRadarZoom" min="0.1" max="3" step="0.1"',
         );
-        expect(radarTemplate).toContain(
-            'Math.max(0.1, Math.min(3, value))',
+        const [, minimum, maximum] = radarTemplate.match(
+            /id="settingRadarZoom" min="([\d.]+)" max="([\d.]+)"/,
         );
+        expect(normalizeRadarZoom(0.01)).toBe(Number(minimum));
+        expect(normalizeRadarZoom(100)).toBe(Number(maximum));
     });
 });

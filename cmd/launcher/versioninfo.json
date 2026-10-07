@@ -1,0 +1,26 @@
+{
+  "FixedFileInfo": {
+    "FileVersion": {
+      "Major": 2,
+      "Minor": 3,
+      "Patch": 0,
+      "Build": 732
+    },
+    "ProductVersion": {
+      "Major": 2,
+      "Minor": 3,
+      "Patch": 0,
+      "Build": 732
+    }
+  },
+  "StringFileInfo": {
+    "FileDescription": "OpenRadar 2.3ESP Deox - Portable Radar Launcher",
+    "FileVersion": "2.3.0.732",
+    "ProductName": "OpenRadar 2.3ESP Deox",
+    "ProductVersion": "2.3ESP_Deox-V7.3.2",
+    "OriginalFilename": "OpenRadar-2.3ESP_Deox.exe",
+    "InternalName": "OpenRadar-launcher",
+    "LegalCopyright": "MIT License; see LICENSE"
+  },
+  "IconPath": "../../web/images/favicon.ico"
+}

@@ -3,30 +3,85 @@ name: Release
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+*"
-      - "[0-9]+.[0-9]+.[0-9]+*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g. 2.2.0)"
+        description: "Existing tag matching AUTOBUILD-VERSION.txt (e.g. v7.3.2)"
         required: true
         type: string
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 env:
-  VERSION: ${{ github.event.inputs.tag || github.ref_name }}
+  GOTOOLCHAIN: local
+  PUPPETEER_SKIP_DOWNLOAD: "true"
 
 jobs:
-  lint:
+  prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      commit: ${{ steps.version.outputs.commit }}
+      revision: ${{ steps.version.outputs.revision }}
+      product: ${{ steps.version.outputs.product }}
+      numeric: ${{ steps.version.outputs.numeric }}
+      epoch: ${{ steps.version.outputs.epoch }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Manual dispatch may only select an existing tag, never a branch.
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          fetch-depth: 0
+
+      - name: Validate existing tag and committed Windows metadata
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          git check-ref-format "refs/tags/$RELEASE_TAG"
+          git show-ref --verify "refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          node --input-type=module <<'NODE'
+          import {readFileSync, appendFileSync} from 'node:fs';
+          const revision = readFileSync('AUTOBUILD-VERSION.txt', 'utf8').trim();
+          if (!/^V\d+\.\d+\.\d+$/.test(revision)) throw new Error('Invalid AUTOBUILD revision');
+          const tag = process.env.RELEASE_TAG;
+          if (tag.replace(/^v/, '') !== revision.slice(1)) throw new Error('Tag differs from AUTOBUILD-VERSION.txt');
+          const product = `2.3ESP_Deox-${revision}`;
+          const core = JSON.parse(readFileSync('cmd/radar/versioninfo.json', 'utf8'));
+          const numeric = core.StringFileInfo.FileVersion;
+          if (!/^\d+\.\d+\.\d+\.\d+$/.test(numeric)) throw new Error('Invalid numeric Windows version');
+          for (const file of ['cmd/radar/versioninfo.json', 'cmd/launcher/versioninfo.json']) {
+            const info = JSON.parse(readFileSync(file, 'utf8'));
+            const fixedVersion = fields => [fields.Major, fields.Minor, fields.Patch, fields.Build].join('.');
+            if (info.StringFileInfo.ProductVersion !== product || info.StringFileInfo.FileVersion !== numeric ||
+                fixedVersion(info.FixedFileInfo.FileVersion) !== numeric || fixedVersion(info.FixedFileInfo.ProductVersion) !== numeric) {
+              throw new Error(`Committed metadata differs from AUTOBUILD: ${file}`);
+            }
+          }
+          const manifest = readFileSync('tools/windows-build/OpenRadar.manifest', 'utf8');
+          if (!manifest.includes(`version="${numeric}"`)) throw new Error('Windows manifest version differs');
+          appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\nrevision=${revision.slice(1)}\nproduct=${product}\nnumeric=${numeric}\n`);
+          NODE
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "epoch=$(git show -s --format=%ct HEAD)" >> "$GITHUB_OUTPUT"
+
+  quality:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
       - uses: ./.github/actions/setup
 
       - name: Lint Go
@@ -34,158 +89,178 @@ jobs:
         with:
           version: v2.13.2
 
-      - name: Lint Frontend
-        run: npm run lint
+      - name: Lint and typecheck frontend
+        run: |
+          npm run lint
+          npm run typecheck
 
-  test:
+      - name: Race and frontend tests
+        run: |
+          go test -race ./...
+          npm test
+
+      - name: Offline static and functional QA
+        run: |
+          python3 tools/qa-static.py
+          node tools/qa-v7-smoke.mjs
+
+  build-linux:
+    needs: [prepare, quality]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup
-
-      - name: Test Go
-        run: go test ./...
-
-      - name: Test Frontend
-        run: npm test
-
-  build:
-    needs: [lint, test]
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
+    timeout-minutes: 20
+    env:
+      PRODUCT_VERSION: ${{ needs.prepare.outputs.product }}
+      BUILD_EPOCH: ${{ needs.prepare.outputs.epoch }}
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
-      - uses: ./.github/actions/setup
-        with:
-          fetch-depth: "0"
-
-      - uses: docker/setup-buildx-action@v4
-
-      - name: Build all artifacts
-        run: make all-in-one VERSION=${{ env.VERSION }}
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: dist
-          path: dist/
-          retention-days: 1
-
-  enhance-windows:
-    needs: build
-    runs-on: windows-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v6
+          ref: ${{ needs.prepare.outputs.commit }}
       - uses: ./.github/actions/setup
 
-      - name: Prepare embedded assets
-        shell: bash
+      - name: Build Linux natively
         run: |
           npm run build
-          npx tsx tools/compress-game-data.ts web/ao-bin-dumps --delete-originals
-
-      - name: Install goversioninfo
-        run: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
-
-      - name: Generate versioninfo.json
-        shell: pwsh
-        run: |
-          $version = "${{ env.VERSION }}"
-          $parts = $version -split '[.\-]'
-          $major = if ($parts[0] -match '^\d+$') { [int]$parts[0] } else { 0 }
-          $minor = if ($parts.Length -gt 1 -and $parts[1] -match '^\d+$') { [int]$parts[1] } else { 0 }
-          $patch = if ($parts.Length -gt 2 -and $parts[2] -match '^\d+$') { [int]$parts[2] } else { 0 }
-          $json = @{
-            FixedFileInfo = @{
-              FileVersion    = @{ Major = $major; Minor = $minor; Patch = $patch; Build = 0 }
-              ProductVersion = @{ Major = $major; Minor = $minor; Patch = $patch; Build = 0 }
-            }
-            StringFileInfo = @{
-              FileDescription = "OpenRadar - Albion Online Radar"
-              FileVersion     = $version
-              ProductName     = "OpenRadar"
-              ProductVersion  = $version
-              LegalCopyright  = "MIT License"
-            }
-            IconPath = "../../web/images/favicon.ico"
-          } | ConvertTo-Json -Depth 10
-          $json | Out-File -FilePath cmd/radar/versioninfo.json -Encoding UTF8
-
-      - name: Generate Windows resources
-        run: goversioninfo -64
-        working-directory: cmd/radar
-
-      - name: Build Windows binary with embedded resources
-        shell: bash
-        env:
-          CGO_ENABLED: "1"
-        run: |
-          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          mkdir -p dist
-          go build \
-            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
-            -o dist/OpenRadar-windows-amd64.exe ./cmd/radar
+          make build-linux VERSION="$PRODUCT_VERSION" BUILD_TIME="$(date -u -d "@$BUILD_EPOCH" +%Y-%m-%dT%H:%M:%SZ)"
+          make readmes VERSION="$PRODUCT_VERSION"
+          ./dist/OpenRadar-linux-amd64 --version
+          mkdir -p .build/release-assets
+          cp dist/OpenRadar-linux-amd64 ".build/release-assets/OpenRadar-$PRODUCT_VERSION-linux-amd64"
+          cp dist/README-linux.txt .build/release-assets/README-linux.txt
 
       - uses: actions/upload-artifact@v7
         with:
-          name: windows-enhanced
-          path: dist/OpenRadar-windows-amd64.exe
-          retention-days: 1
+          name: linux-release
+          path: .build/release-assets/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  build-windows:
+    needs: [prepare, quality]
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.epoch }}
+      PRODUCT_VERSION: ${{ needs.prepare.outputs.product }}
+      NUMERIC_VERSION: ${{ needs.prepare.outputs.numeric }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: ./.github/actions/setup
+        with:
+          install-dependencies: "false"
+
+      - name: Use an isolated portable builder cache
+        run: '"LOCALAPPDATA=$env:RUNNER_TEMP/openradar-local-appdata" >> $env:GITHUB_ENV'
+
+      - name: Cache portable MinGW and Npcap SDK
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/openradar-local-appdata/OpenRadar-Deox/build-cache
+          key: windows-portable-v1-${{ hashFiles('AUTO-BUILD-2.3ESP_Deox.ps1', 'tools/windows-build/release.ps1', 'go.mod', 'go.sum', 'package-lock.json') }}
+          restore-keys: windows-portable-v1-
+
+      - name: Build portable Windows package
+        # Allow initial portable SDK/MinGW preparation; Go/Node come from setup.
+        # Linux already ran lint/typecheck/race/frontend QA. No driver is installed.
+        run: |
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File AUTO-BUILD-2.3ESP_Deox.ps1 -SkipQA -OutputDirectory dist/.staging/release
+          if ($LASTEXITCODE -ne 0) { throw 'Portable Windows build failed.' }
+
+      - name: Test Windows packaging and resources
+        run: |
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-build/test.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Windows packaging/resource tests failed.' }
+
+      - name: Verify Windows release and prepare versioned assets
+        run: |
+          New-Item -ItemType Directory -Path .build/release-assets -Force | Out-Null
+          # The verifier runs only --version; capture is never opened.
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-build/verify.ps1 -Directory dist/.staging/release -ExpectedProduct $env:PRODUCT_VERSION -ExpectedNumeric $env:NUMERIC_VERSION
+          if ($LASTEXITCODE -ne 0) { throw 'Windows release verification failed.' }
+          $scope = 'Windows: portable build, import audit, packaging/resource tests and verify.ps1 passed (metadata, checksums, ZIP and exact launcher payload). Only --version was executed; no live capture or Npcap driver installation. Npcap is not redistributed.'
+          $scope >> $env:GITHUB_STEP_SUMMARY
+          [IO.File]::WriteAllText((Join-Path $PWD '.build/release-assets/WINDOWS-VERIFICATION.txt'), $scope + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+          Copy-Item -LiteralPath dist/.staging/release/OpenRadar-2.3ESP_Deox.exe -Destination ".build/release-assets/OpenRadar-$env:PRODUCT_VERSION.exe"
+          Copy-Item -LiteralPath dist/.staging/release/OpenRadar-2.3ESP_Deox-direct-windows-amd64.zip -Destination ".build/release-assets/OpenRadar-$env:PRODUCT_VERSION-direct-windows-amd64.zip"
+          Copy-Item -LiteralPath dist/.staging/release/RELEASE.txt -Destination .build/release-assets/WINDOWS-RELEASE.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-release
+          path: .build/release-assets/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Windows build evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-release-evidence
+          path: |
+            build-logs/*.log
+            .build/qa/release-integrity-*.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
 
   release:
-    needs: [build, enhance-windows]
+    needs: [prepare, build-linux, build-windows]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_REVISION: ${{ needs.prepare.outputs.revision }}
+      PRODUCT_VERSION: ${{ needs.prepare.outputs.product }}
+      NUMERIC_VERSION: ${{ needs.prepare.outputs.numeric }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ needs.prepare.outputs.commit }}
           fetch-depth: 0
 
       - uses: actions/download-artifact@v7
         with:
-          name: dist
-          path: dist
+          pattern: "*-release"
+          path: .build/release-assets
+          merge-multiple: true
 
-      - name: Overlay enhanced Windows .exe
-        uses: actions/download-artifact@v7
-        with:
-          name: windows-enhanced
-          path: dist
-
-      - name: Regenerate checksums (Windows .exe changed)
-        working-directory: dist
-        run: sha256sum OpenRadar-linux-amd64 OpenRadar-windows-amd64.exe README-linux.txt README-windows.txt > checksums-sha256.txt
-
-      - name: Generate release notes
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: cliff.toml
-          args: --latest
-        env:
-          OUTPUT: dist/RELEASE.md
-
-      - name: Create draft release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check downloaded assets and regenerate release checksums
         run: |
-          gh release create "${{ env.VERSION }}" \
-            --draft \
-            $([[ "${{ env.VERSION }}" == *-* ]] && echo --prerelease) \
-            --title "OpenRadar v${{ env.VERSION }}" \
-            --notes-file dist/RELEASE.md \
-            dist/OpenRadar-linux-amd64 \
-            dist/OpenRadar-windows-amd64.exe \
-            dist/README-linux.txt \
-            dist/README-windows.txt \
-            dist/checksums-sha256.txt
+          cd .build/release-assets
+          test -s "OpenRadar-$PRODUCT_VERSION.exe"
+          test -s "OpenRadar-$PRODUCT_VERSION-direct-windows-amd64.zip"
+          test -s "OpenRadar-$PRODUCT_VERSION-linux-amd64"
+          test -s README-linux.txt
+          test -s WINDOWS-RELEASE.txt
+          test -s WINDOWS-VERIFICATION.txt
+          sha256sum "OpenRadar-$PRODUCT_VERSION.exe" "OpenRadar-$PRODUCT_VERSION-direct-windows-amd64.zip" "OpenRadar-$PRODUCT_VERSION-linux-amd64" README-linux.txt WINDOWS-RELEASE.txt WINDOWS-VERIFICATION.txt > SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
+
+      - name: Prepare draft notes from this build
+        run: |
+          {
+            printf 'OpenRadar %s (Windows numeric version %s).\n\n' "$PRODUCT_VERSION" "$NUMERIC_VERSION"
+            printf 'Radar-only sources, without movement or gathering automation.\n\n'
+            cat .build/release-assets/WINDOWS-VERIFICATION.txt
+            printf '\nSee WINDOWS-RELEASE.txt for build details and SHA256SUMS.txt for every attached asset.\n'
+          } > .build/release-notes.md
+
+      - name: Create or update a draft for the existing tag
+        run: |
+          git show-ref --verify "refs/tags/$RELEASE_TAG"
+          if gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' > .build/release-is-draft.txt; then
+            test "$(cat .build/release-is-draft.txt)" = "true" || { echo 'Refusing to modify a published release.'; exit 1; }
+            gh release edit "$RELEASE_TAG" --draft --title "OpenRadar V$RELEASE_REVISION" --notes-file .build/release-notes.md
+            gh release upload "$RELEASE_TAG" .build/release-assets/* --clobber
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "OpenRadar V$RELEASE_REVISION" --notes-file .build/release-notes.md .build/release-assets/*
+          fi

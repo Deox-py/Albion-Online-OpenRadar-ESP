@@ -1,6 +1,7 @@
 import {CATEGORIES} from "../constants/LoggerConstants.js";
 import imageCache from "./ImageCache.js";
 import settingsSync from "./SettingsSync.js";
+import {normalizeRadarZoom} from './RadarZoomController.js';
 
 const SCALE_FACTOR = 1.0;
 const BASE_ZOOM = 4;
@@ -14,8 +15,7 @@ export class DrawingUtils {
     }
 
     getZoomLevel() {
-        if (typeof window !== 'undefined' && window.innerWidth < 640) return 0.9;
-        return settingsSync.getFloat('settingRadarZoom') || 1.0;
+        return normalizeRadarZoom(settingsSync.getFloat('settingRadarZoom'));
     }
     getIconSizeMultiplier() {
         const v = settingsSync.getFloat('settingIconSize');

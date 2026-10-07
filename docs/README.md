@@ -1,41 +1,46 @@
-# OpenRadar Documentation
+# Documentación de OpenRadar V7.3.2
 
-Everything that ships with the repo, and what each file is for.
+Estas fuentes corresponden al radar en español V7.3.2, sin automatización. Los informes anteriores y las notas del upstream se conservan como historial; sus rutas de trabajo, cifras de QA y binarios describen sesiones anteriores. Los logs, capturas privadas y archivos de `.build/` no forman parte del repositorio público.
 
-## Start here
+## Para empezar
 
-| Document | Purpose |
-|---|---|
-| [Main README](../README.md) | install, quick start, what the radar detects |
-| [DEV_GUIDE.md](./dev/DEV_GUIDE.md) | development setup, build system, testing |
-| [TODO.md](./project/TODO.md) | roadmap, open observations, tech debt |
+| Documento | Contenido |
+| --- | --- |
+| [README principal](../README.md) | Funciones, límites, compilación y uso en Windows |
+| [Guía de desarrollo](dev/DEV_GUIDE.md) | Preparar herramientas, QA y recorrido del código |
+| [Distribución Windows](technical/WINDOWS_RELEASE.md) | Salida provisional, hashes, metadatos y firma opcional |
+| [Informe V7.3.2](releases/INFORME-V7.3.2-COFRES.md) | Cofres, filtros neutros, estado bruto, cifrado y validación histórica |
+| [Integración GitHub V7.3.2](releases/INTEGRACION-GITHUB-V7.3.2.md) | Organización pública, CI y verificaciones de este árbol de fuentes |
+| [Reglas de entrega](../CONTRIBUTING.md) | Alcance del radar y organización local de dos EXE |
 
-## Technical deep-dives
+## Referencias técnicas
 
-`docs/technical/` documents how a subsystem works today. Not how it got there: git log is the history.
+| Documento | Tema |
+| --- | --- |
+| [Diagnósticos e inspector](technical/EXPERIMENTAL_DIAGNOSTICS_V7.3.0.md) | Funciones del radar conservadas en V7.3.2 y procedencia de catálogos |
+| [Jugadores](technical/PLAYERS.md) | Lista, equipamiento, alertas y exclusiones |
+| [Posiciones y MITM](technical/PLAYER_POSITIONS_MITM.md) | Referencia histórica; no implementa un descifrador actual |
+| [Recursos](technical/HARVEST_EVENTS.md) | Recursos estáticos/vivos y resolución de tier |
+| [Mists](technical/MISTS_DETECTION.md) | Portales, jaulas y detección de Nieblas |
+| [Interfaces de captura](technical/CAPTURE_INTERFACES.md) | Gestor de interfaces y configuración de red |
+| [Logs](technical/LOGGING.md) | Diagnóstico y grabación PCAP solicitada por el usuario |
+| [Códigos Protocol18](technical/PROTOCOL18_OBSERVED_CODES.md) | Códigos observados y conteos del corpus |
+| [Campos Protocol18](technical/PROTOCOL18_PARAM_LAYOUTS.md) | Layouts de parámetros observados |
+| [Comparación DEATHEYE](technical/DEATHEYE_ANALYSIS.md) | Arquitectura de una referencia anterior |
+| [ZIP de referencia](technical/REFERENCE_PROJECTS_REVIEW.md) | Inspección estática de las copias recibidas |
+| [Radares públicos](technical/INTERNET_RADARS_REVIEW_2026-10-03.md) | Revisión fechada de fuentes públicas y sus límites |
+| [AlbionOnline-ex](technical/ALBIONONLINE_EX_ADDITIONAL_REVIEW.md) | Diferencia entre anuncios, fuentes disponibles y paquetes binarios |
 
-| Document | Topic |
-|---|---|
-| [PLAYERS.md](./technical/PLAYERS.md) | player detection, alert gate, ignore list |
-| [PLAYER_POSITIONS_MITM.md](./technical/PLAYER_POSITIONS_MITM.md) | why live positions are encrypted, why no MITM |
-| [HARVEST_EVENTS.md](./technical/HARVEST_EVENTS.md) | event 40/46/61 logic, living vs static, tier resolution |
-| [MISTS_DETECTION.md](./technical/MISTS_DETECTION.md) | portal, feu follet, wisp cage detection |
-| [CAPTURE_INTERFACES.md](./technical/CAPTURE_INTERFACES.md) | multi-interface manager, network.json schema, ExitLag behavior |
-| [LOGGING.md](./technical/LOGGING.md) | log routing, file naming, pcap recording |
-| [PROTOCOL18_OBSERVED_CODES.md](./technical/PROTOCOL18_OBSERVED_CODES.md) | observed event and op codes with counts |
-| [PROTOCOL18_PARAM_LAYOUTS.md](./technical/PROTOCOL18_PARAM_LAYOUTS.md) | wire parameter layouts per event code |
-| [DEATHEYE_ANALYSIS.md](./technical/DEATHEYE_ANALYSIS.md) | architecture comparison with DEATHEYE, lessons kept |
+## Historial conservado
 
-## Releases
+| Versión o documento | Alcance histórico |
+| --- | --- |
+| [V7.3.1](releases/INFORME-V7.3.1-RADAR.md) | Retirada de automatización y mejoras del radar |
+| [V7.3.0](releases/INFORME-V7.3.0-PRUEBA.md) | Experimento anterior excluido de estas fuentes |
+| [V7.2.1](releases/INFORME-V7.2.1.md) | Zoom, contexto de mapa y compilación anterior |
+| [V7.2.0](releases/INFORME-V7.2.0.md) | Estabilidad, captura, parser y revisión inicial |
+| [Notas Deox](history/deox/README-2.3ESP_Deox.md) | Cambios y QA anteriores |
+| [README upstream anterior](history/upstream/README-before-V7.2.md) | Documentación recibida del proyecto original |
+| [Roadmap upstream](project/TODO.md) | Observaciones anteriores y pendientes de validación |
 
-| Version | Notes |
-|---|---|
-| [v2.2.3](./releases/RELEASE_2.2.3.md) | fresh game data on upgrade, equipment ids, alert gate, ignore list |
-| [v2.2.2](./releases/RELEASE_2.2.2.md) | 2026-06-29 patch resync: event codes and mob table |
-| [v2.2.1](./releases/RELEASE_2.2.1.md) | Mists threat detection, Knightfall Abbey, sub-zone maps |
-| [v2.2.0](./releases/RELEASE_2.2.0.md) | Protocol18 stabilization, Mists, multi-interface, logging coherence |
-| [v2.1.0](./releases/RELEASE_2.1.0.md) | memory and performance, Picture-in-Picture, zone-aware alerts |
-| [v2.0.0](./releases/RELEASE_2.0.0.md) | Go backend, UI overhaul |
-
-v2.1.1 and the v1.x line have no note in the repo. Their changelogs live on
-[Releases](https://github.com/Nouuu/Albion-Online-OpenRadar/releases).
+Las notas `RELEASE_2.x.md` pertenecen al upstream y mantienen sus fechas y atribuciones: [2.2.3](releases/RELEASE_2.2.3.md), [2.2.2](releases/RELEASE_2.2.2.md), [2.2.1](releases/RELEASE_2.2.1.md), [2.2.0](releases/RELEASE_2.2.0.md), [2.1.0](releases/RELEASE_2.1.0.md) y [2.0.0](releases/RELEASE_2.0.0.md). No describen la publicación de binarios de este fork.

@@ -6,7 +6,15 @@ import (
 	"reflect"
 )
 
-func deserialize(buf *bytes.Buffer, tc byte) any {
+func deserialize(buf decodeBuffer, tc byte) any {
+	if checked, ok := buf.(*checkedBuffer); ok {
+		if checked.depth >= 64 {
+			checked.fail("parameter nesting exceeds limit")
+			return nil
+		}
+		checked.depth++
+		defer func() { checked.depth-- }()
+	}
 	if tc >= customTypeSlimBase {
 		return deserializeCustom(buf, tc)
 	}
@@ -87,6 +95,7 @@ func deserialize(buf *bytes.Buffer, tc byte) any {
 		if tc&typeArray == typeArray {
 			return deserializeTypedArray(buf, tc&^typeArray)
 		}
+		decodeFailure(buf, "unsupported parameter type")
 		return nil
 	}
 }
@@ -102,7 +111,7 @@ func isComparable(v any) bool {
 	return reflect.TypeOf(v).Comparable()
 }
 
-func deserializeCustom(buf *bytes.Buffer, gpType byte) any {
+func deserializeCustom(buf decodeBuffer, gpType byte) any {
 	if gpType < customTypeSlimBase {
 		if _, err := buf.ReadByte(); err != nil {
 			return nil
@@ -110,6 +119,7 @@ func deserializeCustom(buf *bytes.Buffer, gpType byte) any {
 	}
 	size := int(readCount(buf))
 	if size < 0 || size > buf.Len() || size > maxArraySize {
+		decodeFailure(buf, "custom payload size exceeds message or limit")
 		return nil
 	}
 	data := make([]byte, size)
@@ -119,7 +129,7 @@ func deserializeCustom(buf *bytes.Buffer, gpType byte) any {
 	return ByteArray(data)
 }
 
-func deserializeDictionary(buf *bytes.Buffer) Hashtable {
+func deserializeDictionary(buf decodeBuffer) Hashtable {
 	keyTC, err := buf.ReadByte()
 	if err != nil {
 		return nil
@@ -130,10 +140,11 @@ func deserializeDictionary(buf *bytes.Buffer) Hashtable {
 	}
 	count := int(readCount(buf))
 	if count < 0 || count > maxArraySize || count > buf.Len() {
+		decodeFailure(buf, "dictionary count exceeds message or limit")
 		return nil
 	}
 	out := make(Hashtable, count)
-	for i := 0; i < count && buf.Len() > 0; i++ {
+	for i := range count {
 		kt := keyTC
 		if kt == 0 {
 			kt, err = buf.ReadByte()
@@ -159,12 +170,13 @@ func deserializeDictionary(buf *bytes.Buffer) Hashtable {
 	return out
 }
 
-func deserializeHashtable(buf *bytes.Buffer) Hashtable {
+func deserializeHashtable(buf decodeBuffer) Hashtable {
 	return deserializeDictionary(buf)
 }
-func deserializeObjectArray(buf *bytes.Buffer) any {
+func deserializeObjectArray(buf decodeBuffer) any {
 	size := int(readCount(buf))
 	if size < 0 || size > maxArraySize || size > buf.Len() {
+		decodeFailure(buf, "object array count exceeds message or limit")
 		return nil
 	}
 	result := make([]any, size)
@@ -178,14 +190,15 @@ func deserializeObjectArray(buf *bytes.Buffer) any {
 	return result
 }
 
-func deserializeOperationRequestInner(buf *bytes.Buffer) any {
+func deserializeOperationRequestInner(buf decodeBuffer) any {
 	opCode, _ := buf.ReadByte()
 	params := readParameterTable(buf)
 	return map[string]any{"operationCode": opCode, "parameters": params}
 }
 
-func deserializeOperationResponseInner(buf *bytes.Buffer) any {
+func deserializeOperationResponseInner(buf decodeBuffer) any {
 	if buf.Len() < 3 {
+		decodeFailure(buf, "nested response header truncated")
 		return nil
 	}
 	opCode, _ := buf.ReadByte()
@@ -205,19 +218,20 @@ func deserializeOperationResponseInner(buf *bytes.Buffer) any {
 		"parameters":    params,
 	}
 }
-func deserializeEventDataInner(buf *bytes.Buffer) any {
+func deserializeEventDataInner(buf decodeBuffer) any {
 	code, _ := buf.ReadByte()
 	params := readParameterTable(buf)
 	return map[string]any{"code": code, "parameters": params}
 }
 
-func readParameterTable(buf *bytes.Buffer) map[byte]any {
+func readParameterTable(buf decodeBuffer) map[byte]any {
 	count := int(readCount(buf))
 	if count < 0 || count > maxArraySize || count > buf.Len() {
+		decodeFailure(buf, "parameter count exceeds message or limit")
 		return map[byte]any{}
 	}
 	params := make(map[byte]any, count)
-	for i := 0; i < count && buf.Len() > 0; i++ {
+	for range count {
 		key, err := buf.ReadByte()
 		if err != nil {
 			break
@@ -235,9 +249,12 @@ func DeserializeEvent(data []byte) (*EventData, error) {
 	if len(data) < 1 {
 		return nil, fmt.Errorf("event payload too short: %d", len(data))
 	}
-	buf := bytes.NewBuffer(data)
+	buf := &checkedBuffer{Buffer: bytes.NewBuffer(data)}
 	code, _ := buf.ReadByte()
 	params := readParameterTable(buf)
+	if buf.err != nil {
+		return nil, buf.err
+	}
 	return &EventData{Code: code, Parameters: params}, nil
 }
 
@@ -245,9 +262,12 @@ func DeserializeRequest(data []byte) (*OperationRequest, error) {
 	if len(data) < 1 {
 		return nil, fmt.Errorf("request payload too short: %d", len(data))
 	}
-	buf := bytes.NewBuffer(data)
+	buf := &checkedBuffer{Buffer: bytes.NewBuffer(data)}
 	opCode, _ := buf.ReadByte()
 	params := readParameterTable(buf)
+	if buf.err != nil {
+		return nil, buf.err
+	}
 	return &OperationRequest{OperationCode: opCode, Parameters: params}, nil
 }
 
@@ -255,7 +275,7 @@ func DeserializeResponse(data []byte) (*OperationResponse, error) {
 	if len(data) < 3 {
 		return nil, fmt.Errorf("response payload too short: %d", len(data))
 	}
-	buf := bytes.NewBuffer(data)
+	buf := &checkedBuffer{Buffer: bytes.NewBuffer(data)}
 	opCode, _ := buf.ReadByte()
 	returnCode := readInt16(buf)
 
@@ -275,7 +295,14 @@ func DeserializeResponse(data []byte) (*OperationResponse, error) {
 		}
 	}
 
-	params := readParameterTable(buf)
+	params := make(map[byte]any)
+	// Albion's market-order payload replaces the parameter table entirely.
+	if marketOrders == nil || buf.Len() > 0 {
+		params = readParameterTable(buf)
+	}
+	if buf.err != nil {
+		return nil, buf.err
+	}
 	if marketOrders != nil {
 		params[0] = marketOrders
 	}
@@ -286,9 +313,10 @@ func DeserializeResponse(data []byte) (*OperationResponse, error) {
 		Parameters:    params,
 	}, nil
 }
-func deserializeNestedArray(buf *bytes.Buffer) any {
+func deserializeNestedArray(buf decodeBuffer) any {
 	size := int(readCount(buf))
 	if size < 0 || size > maxArraySize || size > buf.Len() {
+		decodeFailure(buf, "nested array count exceeds message or limit")
 		return nil
 	}
 	tc, err := buf.ReadByte()
@@ -302,9 +330,10 @@ func deserializeNestedArray(buf *bytes.Buffer) any {
 	return result
 }
 
-func deserializeTypedArray(buf *bytes.Buffer, elemType byte) any {
+func deserializeTypedArray(buf decodeBuffer, elemType byte) any {
 	size := int(readCount(buf))
 	if size < 0 || size > maxArraySize {
+		decodeFailure(buf, "typed array count exceeds limit")
 		return nil
 	}
 	switch elemType {
@@ -378,6 +407,7 @@ func deserializeTypedArray(buf *bytes.Buffer, elemType byte) any {
 		for i := range result {
 			elemSize := int(readCount(buf))
 			if elemSize < 0 || elemSize > buf.Len() || elemSize > maxArraySize {
+				decodeFailure(buf, "custom array item exceeds message or limit")
 				return nil
 			}
 			data := make(ByteArray, elemSize)

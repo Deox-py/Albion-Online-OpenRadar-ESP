@@ -4,6 +4,7 @@ import settingsSync from "./SettingsSync.js";
 import zonesDatabase from "../data/ZonesDatabase.js";
 import {shouldRenderLivingResource, shouldRenderStaticResource} from './LivingResourceFilter.js';
 import {EnemyType} from '../handlers/MobsHandler.js';
+import {normalizeRadarZoom} from './RadarZoomController.js';
 
 export class RadarRenderer {
     constructor(dependencies) {
@@ -16,6 +17,7 @@ export class RadarRenderer {
 
         this.lpX = 0;
         this.lpY = 0;
+        this.hasLocalPlayerPosition = false;
         this.map = null;
 
         this.previousTime = performance.now();
@@ -46,8 +48,14 @@ export class RadarRenderer {
      * @param {number} y - Player Y coordinate
      */
     setLocalPlayerPosition(x, y) {
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
         this.lpX = x;
         this.lpY = y;
+        this.hasLocalPlayerPosition = true;
+    }
+
+    invalidateLocalPlayerPosition() {
+        this.hasLocalPlayerPosition = false;
     }
 
     /**
@@ -119,7 +127,10 @@ export class RadarRenderer {
         }
 
         if (this.handlers.harvestablesHandler && this.drawings.harvestablesDrawing) {
-            this.handlers.harvestablesHandler.removeNotInRange(this.lpX, this.lpY);
+            const retentionRange = settingsSync.getNumber('settingResourceRetentionRange', 120);
+            if (this.hasLocalPlayerPosition) {
+                this.handlers.harvestablesHandler.removeNotInRange(this.lpX, this.lpY, retentionRange);
+            }
             this.drawings.harvestablesDrawing.interpolate(
                 this.handlers.harvestablesHandler.harvestableList,
                 this.lpX,
@@ -214,7 +225,7 @@ export class RadarRenderer {
 
                     const baseRadius = settingsSync.getNumber('settingClusterRadius', 30);
                     const adaptive = settingsSync.getBool('settingAutoClusterRadius', true);
-                    const zoom = Math.max(0.25, settingsSync.getFloat('settingRadarZoom') || 1);
+            const zoom = Math.max(0.25, normalizeRadarZoom(settingsSync.getFloat('settingRadarZoom')));
                     // At low zoom, group more aggressively; at high zoom, split clusters
                     // for a cleaner and more useful map. Keep the multiplier bounded.
                     const zoomFactor = adaptive ? Math.max(0.65, Math.min(1.8, 1 / zoom)) : 1;
@@ -365,8 +376,7 @@ export class RadarRenderer {
         const canvasSize = ctx.canvas.width;
         const center = canvasSize / 2;
         const distances = [10, 20];
-        const isSmall = typeof window !== 'undefined' && window.innerWidth < 640;
-        const zoomLevel = isSmall ? 0.9 : (settingsSync.getFloat('settingRadarZoom') || 1.0);
+        const zoomLevel = normalizeRadarZoom(settingsSync.getFloat('settingRadarZoom'));
         const pixelsPerMeter = (canvasSize / 60) * zoomLevel;
 
         ctx.save();
@@ -395,25 +405,28 @@ export class RadarRenderer {
     }
 
     renderZoneInfo(ctx) {
-        if (!this.map?.id) return;
+        if (!this.map) return;
 
-        const zone = zonesDatabase.getZone(this.map.id);
-        const zoneName = zone?.name || this.map.id;
+        const unknown = this.map.id === -1 || this.map.id === '-1' || !this.map.id || this.map.source === 'unknown';
+        const zone = unknown ? null : zonesDatabase.getZone(this.map.id);
+        const zoneName = unknown ? 'Zona sin identificar' : String(zone?.name || this.map.id).slice(0, 90);
         const tier = zone?.tier ? `T${zone.tier}` : '';
-        const pvpType = zone?.pvpType || 'safe';
+        const pvpType = zone?.pvpType || 'unknown';
 
         const pvpStyles = {
             'black': {icon: '\u{1F480}', color: '#ff4444'},
             'red': {icon: '\u{2694}\uFE0F', color: '#ff8800'},
             'yellow': {icon: '\u{1F536}', color: '#ffff00'},
-            'safe': {icon: '\u{1F6E1}\uFE0F', color: '#44ff44'}
+            'safe': {icon: '\u{1F6E1}\uFE0F', color: '#44ff44'},
+            'unknown': {icon: '?', color: '#b6bdc9'}
         };
-        const style = pvpStyles[pvpType] || pvpStyles.safe;
+        const style = pvpStyles[pvpType] || pvpStyles.unknown;
 
         const scale = Math.min(1, ctx.canvas.width / 500);
         const fontPx = Math.max(8, Math.round(11 * scale));
         const boxH = Math.round(22 * scale) + 4;
-        const zoneText = `${zoneName}${tier ? ` (${tier})` : ''} ${style.icon}`;
+        const provenance = this.map.source === 'manual' ? ' [manual]' : this.map.bootstrap ? ' [capturada, parcial]' : '';
+        const zoneText = `${zoneName}${tier ? ` (${tier})` : ''}${provenance} ${style.icon}`;
         ctx.font = `bold ${fontPx}px monospace`;
         const textWidth = ctx.measureText(zoneText).width;
 

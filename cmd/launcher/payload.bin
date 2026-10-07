@@ -1,1 +1,2 @@
-OPENRADAR_CORE_PLACEHOLDER
+OPENRADAR_CORE_PAYLOAD_PLACEHOLDER
+Generate the Windows release with AUTO-BUILD-2.3ESP_Deox.ps1; the builder stages the real core and restores this source placeholder.

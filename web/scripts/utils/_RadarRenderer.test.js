@@ -4,6 +4,8 @@
 import {describe, test, expect, beforeEach, vi} from 'vitest';
 import {loadFixture, normalizeParams} from '../__fixtures__/loader.js';
 import {installRealDatabasesOnWindow} from '../__fixtures__/realDatabases.js';
+import {HarvestablesHandler} from '../handlers/HarvestablesHandler.js';
+import {invalidateRadarState} from './StreamHealth.js';
 
 vi.mock('./SettingsSync.js', () => ({
     default: {
@@ -20,6 +22,51 @@ vi.mock('../data/ZonesDatabase.js', () => ({default: {zones: {}}, ZonesDatabase:
 const {RadarRenderer} = await import('./RadarRenderer.js');
 const {EnemyType} = await import('../handlers/MobsHandler.js');
 const settingsSync = (await import('./SettingsSync.js')).default;
+
+function makeRetentionRenderer() {
+    const handler = new HarvestablesHandler();
+    const renderer = new RadarRenderer({
+        handlers: {harvestablesHandler: handler},
+        drawings: {harvestablesDrawing: {interpolate() {}}},
+        drawingUtils: {},
+    });
+    return {handler, renderer};
+}
+
+describe('RadarRenderer resource retention with decoded local positions', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        settingsSync.getNumber.mockImplementation((_key, fallback) => fallback ?? 0);
+    });
+
+    test('keeps decoded resources before the local position is known', () => {
+        const {handler, renderer} = makeRetentionRenderer();
+        handler.addHarvestable(2338, 'Log', 6, 333, -100, 0, 9);
+        renderer.update();
+        expect(handler.harvestableList.map(resource => resource.id)).toEqual([2338]);
+    });
+
+    test('a real decoded zero-zero position enables distance pruning', () => {
+        const {handler, renderer} = makeRetentionRenderer();
+        handler.addHarvestable(2338, 'Log', 6, 333, -100, 0, 9);
+        handler.addHarvestable(1, 'Log', 6, 2, 3, 0, 9);
+        renderer.setLocalPlayerPosition(0, 0);
+        renderer.update();
+        expect(handler.harvestableList.map(resource => resource.id)).toEqual([1]);
+    });
+
+    test('stream loss stops pruning from the previous decoded player position', () => {
+        const {handler, renderer} = makeRetentionRenderer();
+        renderer.setLocalPlayerPosition(0, 0);
+        invalidateRadarState({harvestables: handler}, renderer, 'queue-overflow');
+        handler.addHarvestable(2338, 'Log', 6, 333, -100, 0, 9);
+        renderer.update();
+        expect(handler.harvestableList.map(resource => resource.id)).toEqual([2338]);
+        renderer.setLocalPlayerPosition(0, 0);
+        renderer.update();
+        expect(handler.harvestableList).toEqual([]);
+    });
+});
 
 function makeRenderer({harvestableList = [], mobsList = []} = {}) {
     return new RadarRenderer({

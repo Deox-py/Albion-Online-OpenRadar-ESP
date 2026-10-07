@@ -108,9 +108,9 @@ export default [
         }
     },
 
-    // Node.js tools/scripts (JS)
+    // Node.js tools/scripts (JS/MJS)
     {
-        files: ["tools/**/*.js"],
+        files: ["tools/**/*.{js,mjs}"],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: "module",
@@ -125,6 +125,19 @@ export default [
                 "varsIgnorePattern": "^_"
             }],
             "import/no-duplicates": "warn"
+        }
+    },
+
+    // Offline V7 smoke harness runs in Node but intentionally exposes browser globals.
+    {
+        files: ["tools/qa-v7-smoke.mjs", "tools/qa-offline-browser.mjs"],
+        languageOptions: {
+            ecmaVersion: 2022,
+            sourceType: "module",
+            globals: {
+                ...globals.node,
+                ...globals.browser
+            }
         }
     },
 

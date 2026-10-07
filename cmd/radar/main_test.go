@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/binary"
 	"errors"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/nospy/albion-openradar/internal/capture"
+	"github.com/nospy/albion-openradar/internal/photon"
 	"github.com/nospy/albion-openradar/internal/ui"
 )
 
@@ -22,6 +24,44 @@ func TestResolvePersistedWithIPOverride(t *testing.T) {
 	got = resolvePersisted(capture.Config{}, all, "10.0.0.99")
 	if got != nil {
 		t.Errorf("override miss should return nil, got %+v", got)
+	}
+}
+
+func TestAppPacketInfoPreservesFlowIsolation(t *testing.T) {
+	events := 0
+	app := &App{photonParser: photon.NewPhotonParser(func(*photon.EventData) { events++ }, nil, nil)}
+	handler, ok := any(app).(interface{ handlePacketInfo(capture.PacketInfo) })
+	if !ok {
+		t.Fatal("application capture path must preserve transport identity")
+	}
+	makeFragment := func(number uint32, offset uint32, data []byte) []byte {
+		packet := make([]byte, 44+len(data))
+		packet[3] = 1
+		packet[12] = 8
+		binary.BigEndian.PutUint32(packet[16:], uint32(32+len(data)))
+		binary.BigEndian.PutUint32(packet[24:], 100)
+		binary.BigEndian.PutUint32(packet[28:], 2)
+		binary.BigEndian.PutUint32(packet[32:], number)
+		binary.BigEndian.PutUint32(packet[36:], 7)
+		binary.BigEndian.PutUint32(packet[40:], offset)
+		copy(packet[44:], data)
+		return packet
+	}
+	first := makeFragment(0, 0, []byte{0, 4, 3, 1})
+	second := makeFragment(1, 4, []byte{252, 3, 3})
+	info := capture.PacketInfo{Interface: "a", Source: "192.0.2.1:5056", Destination: "192.0.2.2:3000", Payload: first}
+	handler.handlePacketInfo(info)
+	info.Interface, info.Payload = "b", second
+	handler.handlePacketInfo(info)
+	if events != 0 {
+		t.Fatalf("mixed packet flows emitted %d events", events)
+	}
+	info.Interface = "a"
+	handler.handlePacketInfo(info)
+	info.Interface, info.Payload = "b", first
+	handler.handlePacketInfo(info)
+	if events != 2 || app.packetsProcessed.Load() != 4 {
+		t.Errorf("events=%d packets=%d, want 2 and 4", events, app.packetsProcessed.Load())
 	}
 }
 

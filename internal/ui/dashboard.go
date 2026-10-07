@@ -49,34 +49,38 @@ type LogMsg struct {
 }
 
 type StatsMsg struct {
-	Packets            uint64
-	Errors             uint64
-	Encrypted          uint64
-	TopParseReason     string
-	TopParseCount      uint64
-	LastParseReason    string
-	LastPayloadLen     int
-	PcapReceived       uint64
-	PcapDropped        uint64
-	PcapIfDropped      uint64
-	PcapStatsErrors    uint64
-	WsReadErrors       uint64
-	WsWriteFailures    uint64
-	WsNormalCloses     uint64
-	WsQueueDrops       uint64
-	WsNoClientMessages uint64
-	WsClients          int
-	MemoryMB           float64
-	MemorySysMB        float64
-	Goroutines         int
-	WsBatches          uint64
-	WsMessages         uint64
-	WsQueueSize        int
-	BytesReceived      uint64
-	BytesSent          uint64
-	LogEntries         uint64
-	LogBatches         uint64
-	LogBufferSize      int
+	Packets              uint64
+	Errors               uint64
+	Encrypted            uint64
+	TopParseReason       string
+	TopParseCount        uint64
+	LastParseReason      string
+	LastPayloadLen       int
+	PcapReceived         uint64
+	PcapDropped          uint64
+	PcapIfDropped        uint64
+	PcapStatsErrors      uint64
+	RecordingQueueDrops  uint64
+	RecordingWriteErrors uint64
+	WsReadErrors         uint64
+	WsWriteFailures      uint64
+	WsNormalCloses       uint64
+	WsQueueDrops         uint64
+	WsClientQueueDrops   uint64
+	WsStreamResets       uint64
+	WsNoClientMessages   uint64
+	WsClients            int
+	MemoryMB             float64
+	MemorySysMB          float64
+	Goroutines           int
+	WsBatches            uint64
+	WsMessages           uint64
+	WsQueueSize          int
+	BytesReceived        uint64
+	BytesSent            uint64
+	LogEntries           uint64
+	LogBatches           uint64
+	LogBufferSize        int
 }
 
 type StatusMsg struct {
@@ -138,27 +142,31 @@ type Dashboard struct {
 	captureRunning bool
 
 	// Real-time stats
-	packets            uint64
-	errors             uint64
-	encrypted          uint64
-	topParseReason     string
-	topParseCount      uint64
-	lastParseReason    string
-	lastPayloadLen     int
-	pcapReceived       uint64
-	pcapDropped        uint64
-	pcapIfDropped      uint64
-	pcapStatsErrors    uint64
-	wsReadErrors       uint64
-	wsWriteFailures    uint64
-	wsNormalCloses     uint64
-	wsQueueDrops       uint64
-	wsNoClientMessages uint64
-	wsClients          int
-	memoryMB           float64
-	memorySysMB        float64
-	goroutines         int
-	startTime          time.Time
+	packets              uint64
+	errors               uint64
+	encrypted            uint64
+	topParseReason       string
+	topParseCount        uint64
+	lastParseReason      string
+	lastPayloadLen       int
+	pcapReceived         uint64
+	pcapDropped          uint64
+	pcapIfDropped        uint64
+	pcapStatsErrors      uint64
+	recordingQueueDrops  uint64
+	recordingWriteErrors uint64
+	wsReadErrors         uint64
+	wsWriteFailures      uint64
+	wsNormalCloses       uint64
+	wsQueueDrops         uint64
+	wsClientQueueDrops   uint64
+	wsStreamResets       uint64
+	wsNoClientMessages   uint64
+	wsClients            int
+	memoryMB             float64
+	memorySysMB          float64
+	goroutines           int
+	startTime            time.Time
 
 	// WebSocket batching stats
 	wsBatches   uint64
@@ -392,10 +400,14 @@ func (d Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		d.pcapDropped = msg.PcapDropped
 		d.pcapIfDropped = msg.PcapIfDropped
 		d.pcapStatsErrors = msg.PcapStatsErrors
+		d.recordingQueueDrops = msg.RecordingQueueDrops
+		d.recordingWriteErrors = msg.RecordingWriteErrors
 		d.wsReadErrors = msg.WsReadErrors
 		d.wsWriteFailures = msg.WsWriteFailures
 		d.wsNormalCloses = msg.WsNormalCloses
 		d.wsQueueDrops = msg.WsQueueDrops
+		d.wsClientQueueDrops = msg.WsClientQueueDrops
+		d.wsStreamResets = msg.WsStreamResets
 		d.wsNoClientMessages = msg.WsNoClientMessages
 		d.wsClients = msg.WsClients
 		d.memoryMB = msg.MemoryMB
@@ -761,6 +773,8 @@ func (d *Dashboard) renderStatsView() string {
 		stat("PCAP perdidos:", formatNumber(d.pcapDropped), d.getDropColor(d.pcapDropped)),
 		stat("IF perdidos:", formatNumber(d.pcapIfDropped), d.getDropColor(d.pcapIfDropped)),
 		stat("Stats fallos:", formatNumber(d.pcapStatsErrors), d.getDropColor(d.pcapStatsErrors)),
+		stat("PCAP cola perdida:", formatNumber(d.recordingQueueDrops), d.getDropColor(d.recordingQueueDrops)),
+		stat("PCAP disco fallos:", formatNumber(d.recordingWriteErrors), d.getDropColor(d.recordingWriteErrors)),
 		stat("Error principal:", truncateText(topParse, 22), ColorWarning),
 		stat("Último error:", truncateText(lastParse, 22), ColorWarning),
 		"",
@@ -783,6 +797,8 @@ func (d *Dashboard) renderStatsView() string {
 		stat("Errores lectura:", formatNumber(d.wsReadErrors), d.getDropColor(d.wsReadErrors)),
 		stat("Fallos escritura:", formatNumber(d.wsWriteFailures), d.getDropColor(d.wsWriteFailures)),
 		stat("Drops de cola:", formatNumber(d.wsQueueDrops), d.getDropColor(d.wsQueueDrops)),
+		stat("Drops por cliente:", formatNumber(d.wsClientQueueDrops), d.getDropColor(d.wsClientQueueDrops)),
+		stat("Estado invalidado:", formatNumber(d.wsStreamResets), d.getDropColor(d.wsStreamResets)),
 		stat("Sin cliente:", formatNumber(d.wsNoClientMessages), ColorMuted),
 		"",
 		section("📈", "Paquetes/seg"),

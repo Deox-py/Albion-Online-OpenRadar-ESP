@@ -23,10 +23,14 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "qa:build": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/windows-build/test.ps1",
+    "test:go": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/test-go.ps1",
+    "test:race": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/test-go.ps1 -Race",
+    "qa:browser": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/qa-offline.ps1"
   },
   "author": "Nospy",
-  "license": "ISC",
+  "license": "MIT",
   "engines": {
     "node": ">=24"
   },
