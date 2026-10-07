@@ -1,8 +1,8 @@
 # Cifrado y posiciones de jugadores: revisión del 7 de octubre de 2026
 
-El aviso `Encrypted traffic seen` confirma que OpenRadar reconoció una marca de cifrado; no identifica jugadores, coordenadas ni el algoritmo negociado. Las dos capturas proporcionadas contienen mensajes Photon legibles junto con mensajes marcados como cifrados. No se ha recuperado ni validado una posición de otro jugador.
+El aviso `Encrypted traffic seen` confirma que OpenRadar reconoció una marca de cifrado; no identifica jugadores, coordenadas ni el algoritmo negociado. Las dos capturas proporcionadas contienen mensajes Photon legibles junto con mensajes marcados como cifrados. La investigación posterior recuperó máscaras XOR efectivas a partir de eventos legibles de hechizos y obtuvo 83 comparaciones posteriores exactas de coordenadas protegidas: 74 de aparición y nueve de movimiento. No se ha validado su ubicación visual en el mapa ni recuperado el array original de `KeySync`.
 
-Se revisó la rama `release/radar-v7.3.2`, partiendo de `f26b1ed9f6c1ce8bfadbd916d61a1ac016e8d1ae`, y fuentes públicas fijadas a commits. El análisis inicial de las capturas utilizó el parser del proyecto. La investigación posterior del cliente instalado utilizó Cpp2IL y una emulación con datos sintéticos, descritas más abajo. No se modificó el juego ni se enviaron los PCAPNG a GitHub. Este informe publica estadísticas y conclusiones técnicas; los archivos privados, direcciones, identidades, claves y valores brutos permanecen fuera del repositorio.
+Se revisó la rama `release/radar-v7.3.2`, partiendo de `f26b1ed9f6c1ce8bfadbd916d61a1ac016e8d1ae`, y fuentes públicas fijadas a commits. El análisis inicial de las capturas utilizó el parser del proyecto. La investigación posterior del cliente instalado utilizó Cpp2IL, emulación con datos sintéticos y comprobaciones con pares privados extraídos de las capturas, descritas más abajo. No se modificó el juego ni se enviaron los PCAPNG a GitHub. Este informe publica estadísticas y conclusiones técnicas; los archivos privados, direcciones, identidades, claves y valores brutos permanecen fuera del repositorio.
 
 ## Qué mecanismos están documentados
 
@@ -80,7 +80,7 @@ El umbral 10000 es una clasificación descriptiva, no un límite oficial del map
 
 En los 76 y 92 eventos `NewCharacter`, el parámetro 12 se decodifica como entero y el 13 como string. Por tanto, ejemplos antiguos que usan directamente uno de esos parámetros como array de coordenadas no encajan con estas muestras.
 
-## Investigación del cliente instalado: XOR confirmado, clave pendiente
+## Investigación del cliente instalado: XOR confirmado
 
 Se inspeccionaron los archivos de la instalación local `albiononline-win32-full-1.32.020.344269`, Unity `6000.3.12f1`, IL2CPP metadata versión 39. Se utilizó la compilación oficial de desarrollo de [Cpp2IL](https://github.com/SamboyCoding/Cpp2IL/tree/b5ad444b82267cb1e4b88b8b373c008105bdea52), conservada sólo en la carpeta local de investigación. Los binarios, metadatos y estructuras recuperadas del cliente no se publican.
 
@@ -99,7 +99,7 @@ Se encontró además un serializador común `n3` que incorpora un ID variable de
 
 Una medición adicional confirmó que los parámetros 16 y 17 de los 76 y 92 `NewCharacter` son arrays de ocho bytes. Su tamaño es compatible con dos floats protegidos, pero no revela los bytes de la clave ni valida las coordenadas por sí solo.
 
-El siguiente experimento se centra en una sesión nueva del juego, capturada desde antes de entrar al personaje, para observar el intercambio y la sincronización de clave. No se añade un modo replay al radar. Cualquier resultado debe contrastarse con posiciones conocidas y nuevos movimientos antes de habilitar marcadores. Si el evento necesario sigue dentro de un mensaje Photon cifrado, reconocer XOR no elimina la necesidad de resolver su envoltura y obtener la clave de esa sesión.
+La primera prueba en vivo se centró en capturar desde antes de entrar al personaje para observar el intercambio y la sincronización de clave. Su resultado inicial y la recuperación posterior por una vía distinta se presentan a continuación. No se añade un modo replay al radar.
 
 ## Captura de inicio y movimiento en vivo
 
@@ -115,7 +115,7 @@ Se realizó una captura nueva mientras el usuario abría el juego, pasaba por se
 | Solicitudes internas de intercambio sin fragmentar / respuestas de operación 0 | 6 / 6 |
 | Responses de operación 0 con array de 96 bytes | 6 |
 | Eventos `KeySync` 603 decodificados | 0 |
-| Posiciones reales descifradas y verificadas | 0 |
+| Posiciones verificadas visualmente en el mapa | 0 |
 
 Los 231 `NewCharacter` mantienen arrays de ocho bytes en los parámetros 16 y 17. Capturar únicamente 5056 conserva los movimientos observados, pero excluye el tráfico inicial de 5055; por eso la investigación de conexión incluyó ambos puertos. No se debe confundir el puerto del inicio con el de los eventos de movimiento.
 
@@ -125,7 +125,7 @@ También se contrastaron los IDs propios recibidos en cinco respuestas `Join` co
 
 El análisis completo se repitió y produjo agregados idénticos. Hay además 27 errores de encuadre del patrón `0x2d` y nueve errores de deserialización; ausencia de un `KeySync` decodificado no prueba que el servidor no lo haya enviado. No se identifica un evento concreto dentro de los mensajes cifrados ni se atribuyen todos los errores al cifrado.
 
-El resultado de la prueba en vivo es una captura de inicio utilizable y la localización más precisa del bloqueo: la clave de posiciones sigue sin recuperarse. Reconocer XOR no equivale a obtener su clave. Antes de habilitar jugadores es necesario obtener una clave válida por una vía comprobable o verificar un método de recuperación con posiciones conocidas; las hipótesis sobre el contenido de mensajes protegidos siguen pendientes. No se añade replay, no se habilitan coordenadas estimadas y no se entrega un EXE anunciado como descifrador.
+En esta fase inicial se obtuvo una captura de inicio utilizable, pero no el contenido de `KeySync`. Posteriormente se encontró una vía de recuperación de máscaras efectivas mediante `CastSpell`, descrita más abajo. El radar publicado continúa sin habilitar marcadores de jugadores.
 
 ## Seguimiento de KeySync y comprobación de permisos
 
@@ -143,7 +143,37 @@ No se decodificó ningún evento 603, tampoco al continuar después de los error
 
 La prueba de permisos se ejecutó primero sin elevación y después como administrador mediante un diagnóstico puntual. `OpenProcess` devolvió un handle en ambos casos, pero `EnumProcessModulesEx` falló con error Win32 5 (`Access denied`); no se localizó `GameAssembly.dll` en el proceso. No se ejecutó `ReadProcessMemory`. Por tanto, la elevación no resolvió la consulta y no se ha demostrado acceso a la memoria del cliente ni identificado la causa exacta del bloqueo. No se modificaron protecciones ni el proceso del juego. Los permisos de consulta y lectura son operaciones distintas en el [modelo de acceso de Windows](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights).
 
-Resultado acumulado: asociación de `KeySync` con el array usado como clave de posiciones confirmada estáticamente; claves de sesión recuperadas y posiciones reales verificadas, cero. Sigue pendiente obtener contenido válido de esa sincronización o un par comprobable de posición conocida y posición protegida. Los archivos y las capturas disponibles no han proporcionado ese contenido. Se conserva el informe y no se presenta una versión nueva como descifrador funcional.
+Esta investigación confirma la asociación de `KeySync` con el array usado para posiciones, pero no obtiene su contenido original ni la clave del cifrado Photon. La recuperación de máscaras efectivas que sigue utiliza otros eventos legibles y no depende de acceder a la memoria del juego.
+
+## Recuperación de máscaras mediante hechizos: prueba con un solo cliente
+
+El evento legible `CastSpell = 19` contiene un ID de emisor en el parámetro 0, un ID de objetivo en el 1 y dos float32 en el 2. La estructura del cliente instalado coincide con esas formas. Para eventos dirigidos al mismo ID (`p0 == p1`) de una entidad previamente observada como jugador, esos floats proporcionan un candidato de posición conocido. Se emparejan con sus bytes protegidos anteriores, conservando flujo direccional, interfaz, peer y challenge, y retirando entidades al recibir `Leave`.
+
+Se calcula una máscara efectiva de ocho bytes mediante `M = C XOR P`, donde `C` son los ocho bytes protegidos y `P` son los dos floats legibles en little-endian. Un par aislado sólo propone una máscara: siempre puede construirse por esa fórmula. La comprobación útil aplica una máscara aprendida **antes** al ciphertext de pares posteriores y compara el resultado con sus floats legibles sin utilizar esos nuevos floats para actualizar la máscara primero.
+
+La prueba exploratoria que acepta observaciones de hasta 250 ms obtiene 6/6 comparaciones exactas en A, 11/19 en B y 73/85 en la captura de inicio. Los ocho y doce fallos de B e inicio impiden usar esa política tal cual para dibujar jugadores. Pueden intervenir cambios de máscara y desfases entre movimiento y hechizo; no se atribuye una causa única a cada fallo.
+
+La primera política estricta, con semillas sólo de aparición, produjo 72 comparaciones posteriores exactas, de las cuales una era de movimiento. Una variante con semillas sólo de movimiento produjo 20 comparaciones exactas, ocho de movimiento. Esos resultados se solapan y no se suman. La política final admite una aparición **o un movimiento** emparejado con un hechizo dirigido al mismo emisor, únicamente si ambos se reciben en **el mismo registro de datagrama**, con el mismo timestamp. Invalida la máscara ante cualquier evento Photon completo marcado como cifrado (`0x84`), sin afirmar que todos esos eventos sean `KeySync`. Evalúa los pares posteriores con una observación de antigüedad máxima de 250 ms antes de aprender otro par. Esta política es conservadora, pero no demuestra que detecte todas las rotaciones posibles.
+
+| Captura | Semillas estrictas | Invalidaciones por evento opaco | Comparaciones posteriores | Exactas / fallidas | Aparición / movimiento exactos |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A, adjunta del escritorio | 2 | 1 | 5 | 5 / 0 | 5 / 0 |
+| B, adjunta de Documentos | 10 | 10 | 9 | 9 / 0 | 1 / 8 |
+| Inicio de sesión, 14361 registros | 17 | 15 | 69 | 69 / 0 | 68 / 1 |
+| Primera prueba adicional durante la partida, 5025 registros | 2 | 2 | 0 | 0 / 0 | 0 / 0 |
+| Segunda prueba adicional durante la partida, 4602 registros | 0 | 0 | 0 | 0 / 0 | 0 / 0 |
+
+La política final obtiene **83 comparaciones posteriores exactas y cero fallidas dentro de las ventanas admitidas**. Sesenta y ocho corresponden a un ID distinto del que aportó la semilla; cuarenta corresponden además a bits de posición distintos. Son comparaciones de eventos, sin deduplicar retransmisiones, no 68 jugadores únicos. Las ventanas descartadas y las observaciones sin máscara no se cuentan como éxitos. Las dos pruebas adicionales actuales no aportaron comparaciones posteriores válidas.
+
+Los pares exitosos se repitieron con las instrucciones originales de la rutina nativa `n7`, RVA `0x8CF2A0`: **166 lecturas de float32 coincidieron bit a bit**. Además se identificó el consumidor de aparición `csa.v`, RVA `0xBE9820`: divide el array del parámetro 16 en dos bloques de cuatro bytes, aplica `e0.a` con offsets de clave 0 y 4 y reconstruye los floats. Su helper XOR, RVA `0x8DFE00`, produjo **148 coincidencias exactas** en los 74 pares de aparición. La emulación utiliza un array sintético que contiene la máscara efectiva recuperada; no demuestra que el array original recibido por `KeySync` tenga esa longitud. El hash del cliente se comprueba antes de utilizar estos RVA.
+
+La primera captura adicional durante la partida terminó normalmente tras cuatro minutos, con 5025 paquetes y cero pérdidas registradas por `dumpcap`. Su SHA-256 es `F0514214E819523B40C4EEFB644FF12CB90561C7D17392CFADBF6B3580BA3FDA`. Aportó seis hechizos propios, tres de emisores observados como jugadores y tres pares candidatos de movimiento. Dos tenían antigüedad cero y sirvieron como semillas de movimiento, pero ambas máscaras se invalidaron ante eventos cifrados antes de disponer de un par posterior. La política exploratoria hizo una comparación posterior y falló. Esta muestra **no amplía las comparaciones validadas** y demuestra que no basta con obtener un candidato aislado mientras se juega.
+
+La segunda captura adicional terminó tras otros cuatro minutos, con 4602 paquetes y cero pérdidas registradas por `dumpcap`. Su SHA-256 es `37C3450AB0707B87A9AF5267D50DF06A52E36029DE62CAE3974F17D3EFFD7AE8`. No aportó eventos de hechizo propio utilizables por esta prueba; tampoco nuevas máscaras o comparaciones posteriores. El usuario continuó en su zona habitual.
+
+La vía encontrada no requiere un segundo PC y no descifra el cifrado de Photon: aprovecha coordenadas legibles de otro evento para recuperar los ocho bytes efectivos necesarios para esos pares. No se extrajo ningún array original de `KeySync`, no se recuperó una clave AES/DH y no se accedió a la memoria del juego. Las máscaras, las coordenadas, los IDs y los fixtures de comprobación se mantienen privados.
+
+El resultado acredita recuperación en ventanas concretas y exige ampliar la prueba de movimiento: de las 83 comprobaciones de la política final, nueve son de `Move`. Aún no se han contrastado marcadores con la ubicación visible de jugadores en el juego. Una versión que dibuje posiciones necesita corroborar cada máscara con pares independientes, retirarla ante cambios o pérdida de confianza y disponer de validación continua de movimientos. La entrega V7.3.2 no incorpora todavía este aprendizaje ni un descifrador operativo.
 
 ## Comprobación de proyectos en GitHub
 
@@ -160,4 +190,4 @@ Esta actualización aporta el informe y avisos en las notas históricas. Mantien
 
 Se ejecutaron el replay agregado de ambos PCAPNG, `go test -count=1 ./internal/photon/...`, y `go test -race -count=1 ./internal/photon/...` después de configurar CGO con `tools/go-env.ps1`: aprobados. La primera invocación de race sin CGO no pudo ejecutarse; la ejecución configurada pasó. Las pruebas existentes de `PlayersHandler`, `PlayerListRenderer` y `EventRouter` aprobaron: 202 tests en tres archivos. No se recompiló porque sólo se editó documentación.
 
-Los resultados detallados del análisis inicial quedan localmente en `.build/qa/encryption-20261007/`, excluidos de Git. La investigación posterior del cliente y la verificación nativa quedan igualmente locales, sin subir software del juego ni capturas privadas. Los dos EXE seleccionados, V7.3.2 y V7.3.1-Old, conservan sus versiones y hashes verificados. Se confirmó la rutina XOR del cliente instalado con datos sintéticos; siguen pendientes la clave de una sesión, la envoltura Photon y una comparación independiente con posiciones reales conocidas.
+Los resultados detallados del análisis inicial quedan localmente en `.build/qa/encryption-20261007/`, excluidos de Git. La investigación posterior del cliente y la verificación nativa quedan igualmente locales, sin subir software del juego ni capturas privadas. Los dos EXE seleccionados, V7.3.2 y V7.3.1-Old, conservan sus versiones y hashes verificados. Se confirmó la rutina XOR con datos sintéticos y se contrastaron 83 pares posteriores de las capturas con coordenadas legibles de hechizos. Siguen pendientes una validación visual en el mapa, cobertura suficiente de movimiento continuo y la recuperación del array original de `KeySync` o de la clave Photon.
