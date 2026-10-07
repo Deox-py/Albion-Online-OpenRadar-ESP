@@ -12,8 +12,11 @@ TYPEIDS_SUSPECTS.json
 .browser_opened
 
 # Local-only tooling and configuration
-.serena/
-.claude/
+/.*/
+!/.github/
+/*.md
+!/README.md
+!/CONTRIBUTING.md
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
@@ -91,22 +94,13 @@ web/styles/tailwind.css
 ZIP PACKAGE/
 HELPER PACKAGE/
 
-# Serena MCP local memories (kept out of git)
-/.serena/memories/project_summary.md
-/.serena/memories/style_and_conventions.md
-/.serena/memories/suggested_commands.md
-/.serena/.gitignore
-/.serena/project.yml
 /cmd/radar/resource.syso
 
-# Claude-specific files (local only, never commit)
-/CLAUDE.md
 
 # Local full-session Photon captures (never committed, always anonymized then split)
 captures/
 /network.json
 
-# Spec Kit workspace (local only)
+# Local scratch workspace
 /specs/
-/.specify/
 /work
