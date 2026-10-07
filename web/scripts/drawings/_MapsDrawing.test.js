@@ -28,6 +28,7 @@ vi.mock('../data/ZonesDatabase.js', () => ({
 
 const {MapDrawing} = await import('./MapsDrawing.js');
 const zonesDatabase = (await import('../data/ZonesDatabase.js')).default;
+const imageCache = (await import('../utils/ImageCache.js')).default;
 
 function buildCtx() {
     return {
@@ -155,6 +156,17 @@ describe('MapsDrawing per-zone asset extent', () => {
         const tr = lastTranslate(ctx);
         expect(tr[0]).toBeCloseTo(-40, 6);
         expect(tr[1]).toBeCloseTo(-640, 6);
+    });
+
+    test('missing dynamic map asset uses procedural fallback instead of a blank radar', () => {
+        imageCache.GetPreloadedImage.mockReturnValueOnce(null);
+        drawing._drawProceduralFallback = vi.fn();
+        const map = {id: '@MISTS@runtime-instance', hX: 0, hY: 0};
+
+        drawing.draw(ctx, map);
+
+        expect(drawing._drawProceduralFallback).toHaveBeenCalledWith(ctx);
+        expect(ctx.drawImage).not.toHaveBeenCalled();
     });
 
     // @verified 2026-05-13: synthetic. Negative id is the "no map" sentinel from MapH(-1) at boot.
