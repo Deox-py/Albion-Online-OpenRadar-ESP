@@ -177,7 +177,7 @@ El resultado acredita recuperación en ventanas concretas y exige ampliar la pru
 
 ## Diagnóstico temporal en directo y prueba con un jugador observado
 
-Se preparó un diagnóstico privado que recibe PCAPNG por stdin mientras `dumpcap` captura. Un tee binario conserva los paquetes localmente y alimenta al parser durante la partida; imprime sólo contadores. La regresión compara el procesamiento por archivo y por flujo de la captura de inicio y obtiene los mismos contadores. También se verifican el registro de comandos malformados y el requisito de que una corroboración utilice una posición distinta en un datagrama posterior. Las tres pruebas aprobaron. Los errores de parser suspenden y eliminan los candidatos del flujo afectado.
+Se preparó un diagnóstico privado que recibe PCAPNG por stdin mientras `dumpcap` captura. Un tee binario conserva los paquetes localmente y alimenta al parser durante la partida; imprime sólo contadores. La regresión compara el procesamiento por archivo y por flujo de la captura de inicio y obtiene los mismos contadores. También se verifican el registro de comandos malformados y el requisito de que una corroboración utilice una posición distinta en un datagrama posterior. Las cinco pruebas actuales aprobaron, incluidas la protección frente a referencias anteriores a una suspensión y una prueba de integración con comandos de posición, mensaje cifrado y hechizo en distinto orden dentro del mismo datagrama. Los errores de parser suspenden y eliminan los candidatos del flujo afectado.
 
 Se realizaron dos pruebas acotadas adicionales, de tres y dos minutos, con cero pérdidas registradas por `dumpcap`. El usuario indicó que sólo estaba con un jugador desconocido y que éste no podía colaborar; no fue una prueba controlada de desplazamientos conocidos.
 
@@ -193,13 +193,46 @@ Se realizaron dos pruebas acotadas adicionales, de tres y dos minutos, con cero 
 
 SHA-256 de las capturas privadas: `BAE43EF225A568A72EB9948ADA9C718A5AF171A412ECB663089842B4EAD6221F` y `EED4226F5F70A9602EF71CBCA788A327EE17AEB613F0485DCFB4AAE2FAE01FF3`. En la primera prueba las cuatro semillas se invalidaron ante eventos cifrados antes de recibir otro par elegible. La cantidad de jugadores no explica por sí sola ese resultado: también limitaron la prueba la antigüedad de las observaciones y la política de invalidación.
 
-Se estudió una variante más flexible, separada del radar y de la política de 83 comparaciones descrita arriba. Admite observaciones de hasta dos segundos para **proponer candidatos sin confianza**. Conserva el candidato al recibir un evento cifrado, pero suspende inmediatamente todo uso provisional de su máscara. Ante una referencia legible posterior, compara primero sus bytes con la máscara anterior. Sólo vuelve a admitir un uso provisional después de una coincidencia exacta en una posición diferente y un datagrama posterior al de aprendizaje. Esa corroboración puede proceder del mismo jugador. Una discrepancia elimina la máscara; los errores de parser también eliminan los candidatos del flujo. El uso provisional expira a los cinco segundos de la última corroboración.
+Se estudió una variante más flexible, separada del radar y de la política de 83 comparaciones descrita arriba. Admite observaciones de hasta dos segundos para **proponer candidatos sin confianza**. Conserva el candidato al recibir un evento cifrado, pero suspende inmediatamente todo uso provisional de su máscara. Ante una referencia legible posterior, compara primero sus bytes con la máscara anterior. Sólo vuelve a admitir un uso provisional después de una coincidencia exacta en una posición diferente y un datagrama posterior al de aprendizaje. Esa corroboración puede proceder del mismo jugador. La revisión temporal exige además que los bytes protegidos usados para corroborar hayan llegado después del último mensaje o paquete marcado como cifrado, o error de parser, del flujo afectado. Un hechizo posterior no convierte una posición protegida anterior a esa barrera en una prueba de la máscara actual. Cualquier marca de cifrado suspende el uso provisional, aunque su tipo base no sea evento. Una discrepancia elimina la máscara; los errores de parser también eliminan los candidatos del flujo. El uso provisional expira a los cinco segundos de la última corroboración.
 
-En la primera captura esta variante produjo **seis comparaciones posteriores exactas de movimiento y cinco discrepancias**, que rechazó; en la segunda obtuvo una discrepancia y ninguna coincidencia. Las seis coincidencias pertenecen al mismo ID que aportó la semilla de su candidato. Se verificaron sus instrucciones de lectura con los fixtures privados: **doce float32 coincidieron bit a bit con la rutina nativa del cliente**. Este resultado acredita comparaciones de protocolo, no ubicación visual del jugador. Se produjo al analizar la captura recién obtenida con la política adaptada; esa variante todavía no se ha validado en una nueva sesión en directo.
+En la primera captura esta variante produjo **seis comparaciones posteriores exactas de movimiento y cinco discrepancias**, que rechazó; en la segunda obtuvo una discrepancia y ninguna coincidencia. Las seis coincidencias pertenecen al mismo ID que aportó la semilla de su candidato. Se verificaron sus instrucciones de lectura con los fixtures privados: **doce float32 coincidieron bit a bit con la rutina nativa del cliente**. Este resultado acredita comparaciones de protocolo, no ubicación visual del jugador. Se produjo al analizar la captura recién obtenida con la política adaptada; la variante se ejecutó después durante la primera captura en ciudad. Las siguientes pasadas se analizaron al cerrar su captura con la condición temporal reforzada.
 
-La primera muestra permite dos ventanas corroboradas por posiciones distintas del mismo jugador; la mayor duró 2935 ms. Durante esas ventanas se realizaron 14 operaciones provisionales sobre movimientos. Esas 14 posiciones no cuentan como verificadas: no tienen una comparación independiente por evento ni una validación visual. No se observó una discrepancia de referencia mientras una ventana estaba corroborada, pero la muestra es demasiado pequeña para acreditar seguimiento continuo. Las cifras de esta variante no se suman a las 83 comprobaciones de la política original ni se presentan como una política con cero fallos.
+La primera muestra permite dos ventanas corroboradas por posiciones distintas del mismo jugador; la mayor duró 2935 ms. Durante esas ventanas se realizaron 14 operaciones provisionales sobre movimientos. Esas 14 posiciones no cuentan como verificadas: no tienen una comparación independiente por evento ni una validación visual. No se observó una discrepancia de referencia mientras una ventana estaba corroborada en esa primera muestra, pero las pasadas posteriores en ciudad sí las presentan; el resultado anterior no acredita seguimiento continuo. Las cifras de esta variante no se suman a las 83 comprobaciones de la política original ni se presentan como una política con cero fallos.
 
 La entrega V7.3.2 mantiene su comportamiento. Los diagnósticos, ejecutables temporales, máscaras, PCAPNG y fixtures permanecen en `.build/`. No se publica una versión que dibuje jugadores ni se afirma haber recuperado la clave AES o el array original de `KeySync`.
+
+## Pasadas en ciudad: cobertura y fallos del seguimiento provisional
+
+Se capturó con el cliente ya conectado en una ciudad. La primera prueba duró tres minutos; a petición del usuario siguieron una pasada de cuatro minutos y otra de cinco, guardadas por separado. Las tres terminaron normalmente y el capturador notificó cero pérdidas. No cubren la entrada inicial en la zona: los jugadores ya presentes sin una nueva aparición pueden quedar fuera de la asociación de esta prueba. Los contadores son eventos y operaciones, sin deduplicar retransmisiones; no equivalen a jugadores únicos.
+
+| Medida | Ciudad, 3 minutos | Ciudad, 4 minutos | Ciudad, 5 minutos |
+| --- | ---: | ---: | ---: |
+| Registros capturados | 3946 | 10008 | 14983 |
+| Eventos de aparición | 49 | 449 | 628 |
+| Eventos de movimiento asociados a jugadores observados | 1063 | 21304 | 30789 |
+| Comparaciones con candidato anterior | 4 | 261 | 320 |
+| Comparaciones exactas | 3 | 235 | 281 |
+| Exactas de aparición | 3 | 181 | 234 |
+| Exactas de movimiento | 0 | 54 | 47 |
+| Discrepancias rechazadas | 1 | 26 | 39 |
+| Discrepancias durante una ventana provisionalmente corroborada | 0 | 3 | 1 |
+| Ventanas corroboradas | 1 | 22 | 31 |
+| Operaciones provisionales sin validación visual | 4 | 14472 | 20603 |
+| Referencias exactas con ciphertext anterior a una barrera | 0 | 5 | 5 |
+| Intentos de corroboración rechazados por ciphertext anterior | 0 | 4 | 4 |
+| Errores de parser | 2 | 10 | 8 |
+
+Las coincidencias anteriores a una barrera validan una relación histórica entre ciphertext y referencia; no reactivan la confianza de la máscara para movimientos futuros. La prueba de integración verifica esa diferencia incluso cuando la barrera y los eventos comparten datagrama.
+
+Ciudad, 3 minutos: los 3 pares exactos se contrastaron con las instrucciones nativas, con 6 lecturas de float32 exactas y 6 comprobaciones del helper de aparición. SHA-256 de la captura privada: `EA36233B1BA57C7CEBB5C618BC658BDA197F4861FF8744DAF237C5D21B83FB20`.
+
+Ciudad, 4 minutos: los 235 pares exactos se contrastaron con las instrucciones nativas, con 470 lecturas de float32 exactas y 362 comprobaciones del helper de aparición. SHA-256 de la captura privada: `83DFBEB1FD6D5775117A45602991BA24FB364718E56C0244AA059F6CC7AEF8B7`.
+
+Ciudad, 5 minutos: los 281 pares exactos se contrastaron con las instrucciones nativas, con 562 lecturas de float32 exactas y 468 comprobaciones del helper de aparición. SHA-256 de la captura privada: `B650169C53A0A50E9A7101160683F81514DD499A5842DA196EF6AB74FC9B78BF`.
+
+La política original, con semillas en el mismo datagrama y referencias de hasta 250 ms, también se contrastó con la pasada de cuatro minutos: obtuvo 176 comparaciones exactas (162 de aparición y 14 de movimiento) y una discrepancia. Por tanto, las 83 coincidencias sin fallos de las primeras capturas siguen siendo un resultado histórico acotado; no prueban ausencia de fallos en sesiones posteriores.
+
+La ciudad amplió la cobertura de movimientos comprobables, pero las discrepancias dentro de ventanas admitidas muestran que la corroboración puntual no basta para garantizar seguimiento continuo. En la pasada de cuatro minutos las tres discrepancias activas proceden de movimiento, y una usa una observación de hasta 250 ms: reducir la antigüedad por sí sola no elimina el problema. No se ha determinado para cada fallo si interviene desplazamiento entre eventos, cambio de máscara u otra diferencia semántica. Las operaciones provisionales no se cuentan como posiciones verificadas ni se habilitan marcadores en el radar. La entrega V7.3.2 y sus dos EXE permanecen sin cambios.
 
 ## Comprobación de proyectos en GitHub
 
