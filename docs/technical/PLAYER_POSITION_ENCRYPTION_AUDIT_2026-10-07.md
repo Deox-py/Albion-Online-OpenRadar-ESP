@@ -111,7 +111,7 @@ Se realizó una captura nueva mientras el usuario abría el juego, pasaba por se
 | Eventos legibles / requests / responses | 14846 / 1712 / 93 |
 | `NewCharacter` / `Move` legibles, todos en 5056 | 231 / 11440 |
 | Mensajes marcados como cifrados en 5055 / 5056 | 582 / 61 |
-| Tipos cifrados `0x82` / `0x83` / `0x84` | 143 / 1 / 500 |
+| Mensajes cifrados completos `0x82` / `0x83` / `0x84` con el parser original | 143 / 2 / 498 |
 | Solicitudes internas de intercambio sin fragmentar / respuestas de operación 0 | 6 / 6 |
 | Responses de operación 0 con array de 96 bytes | 6 |
 | Eventos `KeySync` 603 decodificados | 0 |
@@ -126,6 +126,24 @@ También se contrastaron los IDs propios recibidos en cinco respuestas `Join` co
 El análisis completo se repitió y produjo agregados idénticos. Hay además 27 errores de encuadre del patrón `0x2d` y nueve errores de deserialización; ausencia de un `KeySync` decodificado no prueba que el servidor no lo haya enviado. No se identifica un evento concreto dentro de los mensajes cifrados ni se atribuyen todos los errores al cifrado.
 
 El resultado de la prueba en vivo es una captura de inicio utilizable y la localización más precisa del bloqueo: la clave de posiciones sigue sin recuperarse. Reconocer XOR no equivale a obtener su clave. Antes de habilitar jugadores es necesario obtener una clave válida por una vía comprobable o verificar un método de recuperación con posiciones conocidas; las hipótesis sobre el contenido de mensajes protegidos siguen pendientes. No se añade replay, no se habilitan coordenadas estimadas y no se entrega un EXE anunciado como descifrador.
+
+## Seguimiento de KeySync y comprobación de permisos
+
+Se resolvió la asociación que faltaba entre el código 603 y el campo de clave. El despachador nativo `ci5.xk` consulta una tabla por código de evento: 603 selecciona la entrada 114 y el bloque en RVA `0x981D54`. Ese bloque deserializa el evento, obtiene el array del campo de su objeto y almacena su referencia directamente en `ci5.cg`, offset `0x2D8`. Coincide con la operación de `ci5.c7`, integrada en el despachador sin una llamada directa a ese método. La ausencia de referencias directas encontrada antes no descartaba esta ruta.
+
+Se verificó la selección de la tabla ejecutando las instrucciones del archivo instalado con cinco códigos sintéticos: 3, 29, 602, 603 y 604. Se emuló además el almacenamiento del bloque 603 con cuatro arrays sintéticos de 5, 7, 8 y 16 bytes: conserva la referencia y los bytes. En esa segunda prueba se sustituyeron el deserializador y la barrera del recolector por funciones de prueba; no se ejecutó una sesión ni se validó la longitud real de la clave. El SHA-256 del cliente se comprobó antes de utilizar las direcciones. Estas pruebas confirman el recorrido del array, no recuperan su contenido en la partida.
+
+La revisión de las capturas ahora observa los mensajes completos, incluidos los reconstruidos a partir de fragmentos. Con la política original del parser se observan 643 mensajes cifrados completos: 143 requests, dos responses y 498 eventos. Esto corrige la clasificación anterior de cabeceras candidatas sin reensamblar, que no era el recuento de mensajes completos entregados por el parser.
+
+Se probó también, sólo en una copia privada de diagnóstico, continuar con el siguiente comando de límites válidos cuando falla la deserialización del anterior. Esta prueba encuentra dos eventos cifrados adicionales, ambos con cuerpo de 96 bytes: el total pasa a 645, con 143 requests, dos responses y 500 eventos. No se modificó el parser del radar. Ninguno de los cuerpos cifrados completos de esta prueba tiene una longitud que no sea múltiplo de 16; es una propiedad compatible con cifrado por bloques y no identifica por sí sola algoritmo o modo.
+
+En las cinco respuestas `Join` aparecen dos eventos cifrados con cuerpo de 32 bytes dentro de los 250 ms anteriores a la respuesta, en la misma conexión direccional, peer y challenge. Son candidatos por proximidad temporal, no eventos `KeySync` identificados. Hay otros mensajes de 32 bytes durante las sesiones: tamaño y momento no bastan para atribuirles un código de evento.
+
+No se decodificó ningún evento 603, tampoco al continuar después de los errores de valores. Una búsqueda adicional del marcador de short 603 en los cuerpos completos no cifrados obtuvo cero coincidencias, incluidas las rutas de deserialización fallida. Esta búsqueda auxiliar no sustituye una decodificación válida ni prueba que la sincronización no se transmitiera dentro de una envoltura cifrada. Los siete mensajes completos con fallo de deserialización de evento no proporcionaron una clave identificable.
+
+La prueba de permisos se ejecutó primero sin elevación y después como administrador mediante un diagnóstico puntual. `OpenProcess` devolvió un handle en ambos casos, pero `EnumProcessModulesEx` falló con error Win32 5 (`Access denied`); no se localizó `GameAssembly.dll` en el proceso. No se ejecutó `ReadProcessMemory`. Por tanto, la elevación no resolvió la consulta y no se ha demostrado acceso a la memoria del cliente ni identificado la causa exacta del bloqueo. No se modificaron protecciones ni el proceso del juego. Los permisos de consulta y lectura son operaciones distintas en el [modelo de acceso de Windows](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights).
+
+Resultado acumulado: asociación de `KeySync` con el array usado como clave de posiciones confirmada estáticamente; claves de sesión recuperadas y posiciones reales verificadas, cero. Sigue pendiente obtener contenido válido de esa sincronización o un par comprobable de posición conocida y posición protegida. Los archivos y las capturas disponibles no han proporcionado ese contenido. Se conserva el informe y no se presenta una versión nueva como descifrador funcional.
 
 ## Comprobación de proyectos en GitHub
 
